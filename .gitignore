@@ -1,0 +1,13 @@
+# Rust/构建产物
+native-certgen/target/
+target/
+*.so
+# Gradle
+.gradle/
+build/
+app/build/
+# 本地
+.workbuddy/
+*.log
+.idea/
+*.iml
