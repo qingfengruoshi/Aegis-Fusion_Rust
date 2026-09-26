@@ -183,6 +183,16 @@ echo "== Fusion overlay"
 # Whole overlay: customize.sh, service.sh, common_func.sh, keybox-fetch.sh, uninstall.sh,
 # META-INF/ (standard Magisk installer; TEESim's zip ships none of its own) and webroot/.
 cp -a "$OVERLAY/." "$STAGE/"
+
+# fusionctl — the Rust management layer (arm64). Optional: staged only when
+# FUSIONCTL_BIN points at a built binary (CI builds it right before assembly).
+# The WebUI probes exec "$MODPATH/fusionctl ui-probe ..." and the manual
+# keybox fetch trigger calls "fusionctl keybox-fetch --force".
+if [ -n "${FUSIONCTL_BIN:-}" ] && [ -f "$FUSIONCTL_BIN" ]; then
+    cp -f "$FUSIONCTL_BIN" "$STAGE/fusionctl"
+    chmod 0755 "$STAGE/fusionctl"
+    echo "   fusionctl (rust management layer)"
+fi
 sed -e "s|@FUSION_VERSION@|${FUSION_VERSION} (TEESim ${TEESIM_VERSION})|" \
     -e "s|@FUSION_VERSION_CODE@|${FUSION_VERSION_CODE}|" \
     "$OVERLAY/module.prop" > "$STAGE/module.prop"
