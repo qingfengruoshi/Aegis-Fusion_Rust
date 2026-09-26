@@ -1,0 +1,139 @@
+diff --git a/app/src/main/java/org/matrix/teesim/App.kt b/app/src/main/java/org/matrix/teesim/App.kt
+index aa90ba9..c4581df 100644
+--- a/app/src/main/java/org/matrix/teesim/App.kt
++++ b/app/src/main/java/org/matrix/teesim/App.kt
+@@ -507,6 +507,6 @@ object App {
+                 }
+             }
+         }
+-        return File("/data/adb/modules/teesim")
++        return File("/data/adb/modules/integrityfusion")
+     }
+ }
+diff --git a/app/src/main/java/org/matrix/teesim/KeyAdmin.kt b/app/src/main/java/org/matrix/teesim/KeyAdmin.kt
+index fc42963..b64bef1 100644
+--- a/app/src/main/java/org/matrix/teesim/KeyAdmin.kt
++++ b/app/src/main/java/org/matrix/teesim/KeyAdmin.kt
+@@ -377,9 +377,14 @@ object KeyAdmin {
+                             )
+                         method == "GET" && path == "/canary" -> Updater.status()
+                         method == "POST" && path == "/canary/install" ->
+-                            Updater.install(
+-                                query["tag"] ?: error("tag required"),
+-                                query["variant"] ?: "release",
++                            // Aegis Fusion build: self-update would flash a standalone
++                            // `teesim` module alongside the fusion module, double-hooking
++                            // the keystore. Disabled — update by flashing a newer fusion zip.
++                            JSONObject().put(
++                                "ok", false
++                            ).put(
++                                "error",
++                                "Self-update is disabled in the Aegis Fusion build; flash a newer fusion module instead."
+                             )
+                         method == "POST" && path == "/logs/write" -> writeLogs(query, requestBody)
+                         else -> JSONObject().put("ok", false).put("error", "not found")
+diff --git a/app/src/main/java/org/matrix/teesim/Updater.kt b/app/src/main/java/org/matrix/teesim/Updater.kt
+index 40000dc..fa6b3cb 100644
+--- a/app/src/main/java/org/matrix/teesim/Updater.kt
++++ b/app/src/main/java/org/matrix/teesim/Updater.kt
+@@ -86,68 +86,10 @@ object Updater {
+      * assets[] }|null, updateAvailable }.
+      */
+     fun status(): JSONObject {
+-        return try {
+-            val cur = currentCode()
+-            val newest = newestCanary(JSONArray(httpGet(API)))
+-            val latest = newest?.let { (code, r) ->
+-                val assets = JSONArray()
+-                val ja = r.optJSONArray("assets") ?: JSONArray()
+-                for (i in 0 until ja.length()) {
+-                    val a = ja.getJSONObject(i)
+-                    assets.put(
+-                        JSONObject().put("name", a.optString("name")).put("size", a.optLong("size"))
+-                    )
+-                }
+-                JSONObject()
+-                    .put("code", code)
+-                    .put("tag", r.optString("tag_name"))
+-                    .put("name", r.optString("name"))
+-                    .put("notes", r.optString("body"))
+-                    .put("htmlUrl", r.optString("html_url"))
+-                    .put("commit", r.optString("target_commitish"))
+-                    .put("assets", assets)
+-            }
+-            JSONObject()
+-                .put("ok", true)
+-                .put("currentCode", cur)
+-                .put("installedVersion", currentVersion())
+-                .put("latest", latest ?: JSONObject.NULL)
+-                .put("updateAvailable", (newest?.first ?: -1) > cur)
+-        } catch (e: Exception) {
+-            SystemLogger.warning("Updater: status check failed", e)
+-            JSONObject().put("ok", false).put("error", e.message ?: "network error")
+-        }
+-    }
+-
+-    /** Download the tag's <variant> zip and flash it via the detected root manager. */
+-    fun install(tag: String, variant: String): JSONObject {
+-        return try {
+-            if (!tag.matches(Regex("^canary-\\d+$"))) return fail("bad tag")
+-            val v = if (variant.equals("debug", true)) "Debug" else "Release"
+-            val releases = JSONArray(httpGet(API))
+-            var url: String? = null
+-            for (i in 0 until releases.length()) {
+-                val r = releases.getJSONObject(i)
+-                if (r.optString("tag_name") != tag) continue
+-                val ja = r.optJSONArray("assets") ?: JSONArray()
+-                for (j in 0 until ja.length()) {
+-                    val a = ja.getJSONObject(j)
+-                    if (a.optString("name").endsWith("-$v.zip")) {
+-                        url = a.optString("browser_download_url")
+-                        break
+-                    }
+-                }
+-            }
+-            url ?: return fail("no $v asset for $tag")
+-            val zip = File(Const.DATA_DIR, ".canary.zip")
+-            download(url, zip)
+-            val res = flash(zip)
+-            zip.delete()
+-            res
+-        } catch (e: Exception) {
+-            SystemLogger.error("Updater: install failed", e)
+-            fail(e.message ?: "install error")
+-        }
++        // Aegis Fusion build: the upstream canary would install a standalone `teesim` module
++        // alongside the fusion module, double-hooking the keystore. Self-update is disabled here;
++        // update by flashing a newer fusion build.
++        return fail("Self-update is disabled in the Aegis Fusion build; flash a newer fusion module instead.")
+     }
+ 
+     private fun download(url: String, dest: File) {
+diff --git a/module/daemon b/module/daemon
+index 0636988..0d79163 100644
+--- a/module/daemon
++++ b/module/daemon
+@@ -1,16 +1,19 @@
+ #!/system/bin/sh
+ # Launches the Kotlin control daemon under app_process.
+ #
+-#   $1 = MODDIR (the module directory holding classes.dex and $ABI/inject + libs)
++#   $1 = MODDIR (the module directory holding teesim-service.dex and $ABI/inject + libs)
++#
++# Aegis Fusion: the daemon dex is renamed from classes.dex to teesim-service.dex because
++# PlayIntegrityFix — bundled in the same module — already ships its payload as classes.dex.
+ 
+ MODDIR=$1
+ 
+-if [ -f "$MODDIR/classes.dex" ]; then
+-  CLASSPATH="$MODDIR/classes.dex"
++if [ -f "$MODDIR/teesim-service.dex" ]; then
++  CLASSPATH="$MODDIR/teesim-service.dex"
+ elif [ -f "$MODDIR/service.apk" ]; then
+   CLASSPATH="$MODDIR/service.apk"
+ else
+-  echo "teesim: neither classes.dex nor service.apk in $MODDIR" >&2
++  echo "teesim: neither teesim-service.dex nor service.apk in $MODDIR" >&2
+   exit 1
+ fi
+ 

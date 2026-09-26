@@ -1,3 +1,8 @@
+> ⚠️ **本文已过时（2026-09-21）**。它写于本仓库仍以 **Enginex0/TEESimulator-RS** 为基座的时期；
+> 该基座已被放弃（见 `GAP-AND-ROADMAP.md` §8/§9），现在的基座是 **JingMatrix/TEESimulator**
+> ——也就是 shell 线自己的上游。文中的「移植清单 P1–P8」「待决事项」按 RS 基座写成，不再适用。
+> 现行路线见 `GAP-AND-ROADMAP.md` §9，接口契约见 `CONTRACT-verdict-keybox.md`。
+
 # Hide-RS 架构与移植计划（v0.1，2026-09-21）
 
 ## 基座盘点（TEESimulator-RS @ 6d241e5）

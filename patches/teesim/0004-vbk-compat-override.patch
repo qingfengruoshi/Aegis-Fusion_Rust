@@ -1,0 +1,35 @@
+diff --git a/app/src/main/java/org/matrix/teesim/Harvester.kt b/app/src/main/java/org/matrix/teesim/Harvester.kt
+index 8a8470b..2a1bcaa 100644
+--- a/app/src/main/java/org/matrix/teesim/Harvester.kt
++++ b/app/src/main/java/org/matrix/teesim/Harvester.kt
+@@ -1267,6 +1267,15 @@ object Harvester {
+      * the raw capture is already usable.
+      */
+     private fun bootKeyOverride(raw: ByteArray): BootOverride? {
++        // Fusion (Aegis) compat override: a 32-byte /data/adb/teesim/bootkey.bin replaces the
++        // verified-boot key even when the TEE capture is usable. TrickyStore-style stacks pass
++        // DEVICE with a randomized key, so the harvested value (or the shared fallback constant)
++        // is a suspect whenever the same keybox passes there but fails here; this file is the
++        // controlled-experiment lever. It feeds the KEK, so it must stay stable once written.
++        forcedBootKey()?.let {
++            SystemLogger.info("boot key: forced from bootkey.bin (fusion compat override)")
++            return BootOverride(it.toHex(), editable = false)
++        }
+         if (isUsableBootValue(raw)) return null
+         hexBytes(DeviceProps.prop("ro.boot.vbmeta.public_key_digest", ""))?.let {
+             return BootOverride(it.toHex(), editable = false)
+@@ -1274,6 +1283,14 @@ object Harvester {
+         return BootOverride(fallbackBootKey().toHex(), editable = true)
+     }
+ 
++    /** Fusion compat: read a forced verified-boot key (exactly 32 non-zero bytes) if present. */
++    private fun forcedBootKey(): ByteArray? {
++        val f = java.io.File("/data/adb/teesim/bootkey.bin")
++        if (!f.isFile || f.length() != 32L) return null
++        val v = f.readBytes()
++        return if (v.size == 32 && v.any { it.toInt() != 0 }) v else null
++    }
++
+     /** A usable boot value: exactly 32 bytes and not all zero. */
+     private fun isUsableBootValue(v: ByteArray?): Boolean =
+         v != null && v.size == 32 && v.any { it.toInt() != 0 }

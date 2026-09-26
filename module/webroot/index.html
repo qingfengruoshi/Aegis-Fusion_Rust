@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Offline by contract: nothing external may ever load. All CSS is local. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'">
+<title>Aegis Fusion</title>
+<link rel="stylesheet" href="css/home.css">
+</head>
+<body data-layout="manifest">
+<main class="wrap">
+    <header class="head">
+        <div>
+            <h1>Aegis Fusion</h1>
+            <p class="sub">TEE 证明伪装 · BL 隐藏 · Keybox 自动管理</p>
+        </div>
+    </header>
+
+    <!-- ---------- 运行状态：签放纸面 ---------- -->
+    <section class="status" id="status" hidden>
+        <div class="status-head">
+            <span class="status-title">运行状态</span>
+            <button class="icon-btn" id="refresh" type="button" aria-label="刷新状态">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                    <path d="M21 3v6h-6"/>
+                </svg>
+            </button>
+        </div>
+        <ul class="status-list">
+            <li id="st-tee">
+                <span class="dot" aria-hidden="true"></span>
+                <span class="label">TEE 引擎</span>
+                <span class="value">检测中…</span>
+            </li>
+            <li id="st-keybox">
+                <span class="dot" aria-hidden="true"></span>
+                <span class="label">Keybox</span>
+                <span class="value">检测中…</span>
+            </li>
+            <li id="st-bl">
+                <span class="dot" aria-hidden="true"></span>
+                <span class="label">BL 隐藏</span>
+                <span class="value">检测中…</span>
+            </li>
+            <li id="st-pif">
+                <span class="dot" aria-hidden="true"></span>
+                <span class="label">指纹伪装层</span>
+                <span class="value">检测中…</span>
+            </li>
+        </ul>
+
+        <div class="kb-ctrl" id="kb-ctrl" hidden>
+            <!-- 折叠联页:渠道与详情。launcher.js 依赖的全部 ID 原样保留:
+                 kb-detail / kb-detail-sum / kb-d-* / kb-source-* / kb-interval-* / kb-now。 -->
+            <details class="kb-detail kb-detail-first" id="kb-detail">
+                <summary>
+                    <span class="kb-detail-label">Keybox</span>
+                    <span class="kb-detail-sum" id="kb-detail-sum">—</span>
+                    <svg class="kb-detail-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </summary>
+                <div class="kb-detail-body">
+                    <p class="kb-d-row"><span class="kb-d-k">当前渠道</span><span class="kb-d-v" id="kb-d-src">—</span></p>
+                    <p class="kb-d-row"><span class="kb-d-k">上次刷新</span><span class="kb-d-v" id="kb-d-refresh">—</span></p>
+                    <p class="kb-d-row" id="kb-d-status-row" hidden><span class="kb-d-k">在线状态</span><span class="kb-d-v" id="kb-d-status">—</span></p>
+                    <p class="kb-d-row"><span class="kb-d-k">上次错误</span><span class="kb-d-v" id="kb-d-err">—</span></p>
+                    <div class="kb-row2 kb-chan">
+                        <span class="kb-ctrl-label">获取渠道</span>
+                        <span class="kb-trig-wrap">
+                            <button class="kb-trigger" id="kb-source-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="val" id="kb-source-val">自动</span>
+                                <svg class="car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                            </button>
+                            <div class="kb-pop" id="kb-source-pop" role="listbox" aria-label="Keybox 获取渠道">
+                                <button type="button" class="kb-opt" data-s="">自动<span class="tick">✓</span></button>
+                                <button type="button" class="kb-opt" data-s="Megatron">Megatron<span class="tick">✓</span></button>
+                                <button type="button" class="kb-opt" data-s="Yurikey">Yurikey<span class="tick">✓</span></button>
+                                <button type="button" class="kb-opt" data-s="KOWX712">KOWX712<span class="tick">✓</span></button>
+                            </div>
+                        </span>
+                    </div>
+                    <div class="kb-row2 kb-interval-row">
+                        <span class="kb-ctrl-label">刷新间隔</span>
+                        <span class="kb-trig-wrap">
+                            <button class="kb-trigger" id="kb-interval-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="num" id="kb-interval-num">—</span><span class="unit" id="kb-interval-unit"></span>
+                                <svg class="car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                            </button>
+                            <div class="kb-pop" id="kb-interval-pop" role="listbox" aria-label="Keybox 自动刷新间隔">
+                                <button type="button" class="kb-opt" data-v="0" data-n="off" data-u="">关闭<span class="tick">✓</span></button>
+                                <button type="button" class="kb-opt" data-v="12" data-n="12" data-u="h">12 小时<span class="tick">✓</span></button>
+                                <button type="button" class="kb-opt" data-v="24" data-n="24" data-u="h">24 小时<span class="tick">✓</span></button>
+                                <button type="button" class="kb-opt" data-v="72" data-n="3" data-u="d">3 天<span class="tick">✓</span></button>
+                                <button type="button" class="kb-opt" data-v="168" data-n="1" data-u="w">每周<span class="tick">✓</span></button>
+                            </div>
+                        </span>
+                    </div>
+                    <div class="kb-manual-row">
+                        <button class="kb-fetch-btn" id="kb-now" type="button">手动获取</button>
+                    </div>
+                    <p class="kb-d-note">选中的渠道优先抓取，失败自动回退其余渠道；自定义渠道见 keybox-sources.conf。"手动获取"按当前渠道强制抓取一次（会接管用户导入的 keybox 为自动管理，原文件保留备份），之后按刷新间隔自动续期。<b>卸载模块会连同 <code>/data/adb/teesim</code> 一起删除（keybox.xml 与滚动备份都在其中）</b>——需要保留请先把它拷出该目录。</p>
+                    <!-- kb-hint:launcher.js 按运行状态写入并解除隐藏（绿格口径等），原样保留 -->
+                    <p class="hint" id="kb-hint" hidden>Keybox 默认从社区源自动获取并定时刷新，主渠道失败时自动轮换备用渠道（Yurikey · KOWX712 镜像）。上方显示的是社区渠道对渠道最新 keybox 的报告，不是 Google 对本机 keybox 的实时判定；实际以 SPIC / Play Integrity API Checker 为准（检测应用需加入受保护列表）。导入自己的 keybox.xml 到 <code>/data/adb/teesim/keybox.xml</code> 后：自动刷新会让路不覆盖，且模块会在下一次检查时自动让引擎重读新箱（通常几分钟内生效，重启则立即生效）——<b>不要</b>为此点"手动获取"，那会从渠道重新抓取并接管你的导入。</p>
+                </div>
+            </details>
+        </div>
+
+        <details class="kb-detail" id="pif-detail" hidden>
+            <summary>
+                <span class="kb-detail-label">指纹伪装层</span>
+                <span class="kb-detail-sum" id="pif-detail-sum">—</span>
+                <svg class="kb-detail-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M6 9l6 6 6-6"/>
+                </svg>
+            </summary>
+            <div class="kb-detail-body">
+                <p class="kb-d-row"><span class="kb-d-k">指纹来源</span><span class="kb-d-v" id="pif-d-src">—</span></p>
+                <p class="kb-d-note" id="pif-d-warn" hidden></p>
+                <div class="kb-manual-row">
+                    <button class="kb-fetch-btn" id="pif-import-btn" type="button">导入指纹文件</button>
+                    <input type="file" id="pif-import" accept=".prop,.json,.txt" hidden>
+                </div>
+                <p class="kb-d-note">联网拉取失败（developer.android.com 不可达）时的替代路径：导入 pif.json / custom.pif.prop，可从任何一台三绿机器导出。导入后立即同步身份并回收 DroidGuard，自动轮换会让路、不会覆盖你的文件。</p>
+            </div>
+        </details>
+
+        <p class="hint off" id="noapi" hidden>无法通过管理器接口读取状态（可能未授权 Root），点右上角 ↻ 重试。</p>
+    </section>
+
+    <!-- ---------- 受保护应用：入口卡片 ---------- -->
+    <a class="apps-entry" id="apps" href="./apps.html" hidden>
+        <span class="apps-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M9 12l2 2 4-4"/>
+            </svg>
+        </span>
+        <span class="apps-entry-body">
+            <span class="apps-entry-title">受保护应用管理</span>
+            <span class="apps-entry-sub" id="apps-entry-sub">正在读取…</span>
+        </span>
+        <span class="apps-entry-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+        </span>
+    </a>
+
+    <!-- ---------- 显示设置：布局 + 主题（仅呈现层，js/prefs.js） ---------- -->
+    <details class="kb-detail" id="settings">
+        <summary>
+            <span class="kb-detail-label">显示设置</span>
+            <span class="kb-detail-sum" id="setSum">签放清单 · 跟随系统</span>
+            <svg class="kb-detail-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6"/>
+            </svg>
+        </summary>
+        <div class="kb-detail-body">
+            <div class="set-row">
+                <span class="set-lbl" id="lbl-layout">布局</span>
+                <div class="seg" role="group" aria-labelledby="lbl-layout">
+                    <button class="seg-btn" type="button" data-layout="brick" aria-pressed="false">v4 状态砖</button>
+                    <button class="seg-btn" type="button" data-layout="manifest" aria-pressed="true">签放清单</button>
+                </div>
+            </div>
+            <div class="set-row">
+                <span class="set-lbl" id="lbl-theme">主题</span>
+                <div class="seg" role="group" aria-labelledby="lbl-theme">
+                    <button class="seg-btn" type="button" data-theme-mode="auto" aria-pressed="true">跟随系统</button>
+                    <button class="seg-btn" type="button" data-theme-mode="light" aria-pressed="false">浅色</button>
+                    <button class="seg-btn" type="button" data-theme-mode="dark" aria-pressed="false">深色</button>
+                </div>
+            </div>
+            <p class="set-note">选择保存在本机（localStorage），"跟随系统"随手机深色模式自动切换。布局切换只改变状态区形态，字段与功能完全一致。</p>
+        </div>
+    </details>
+
+    <footer class="foot">
+        <p class="fine">配置：<code>/data/adb/teesim/config.json</code> · Keybox：<code>/data/adb/teesim/keybox.xml</code></p>
+        <p class="fine">
+            <a class="gh" href="https://github.com/qingfengruoshi/Aegis-Fusion" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.78 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.05.78 2.12v3.14c0 .3.21.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+                GitHub
+            </a> ·
+            <a class="adv" href="./logs.html">日志与诊断</a>
+        </p>
+    </footer>
+</main>
+
+<script src="js/conf.js"></script>
+<script src="js/launcher.js"></script>
+<script src="js/prefs.js"></script>
+</body>
+</html>

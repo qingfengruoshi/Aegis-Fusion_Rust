@@ -1,0 +1,217 @@
+diff --git a/keymint/keymint_router.cpp b/keymint/keymint_router.cpp
+index a15a6b4..7485cfc 100644
+--- a/keymint/keymint_router.cpp
++++ b/keymint/keymint_router.cpp
+@@ -57,6 +57,19 @@ struct TargetPackage {
+   int32_t user_id = 0;
+ };
+ 
++// The nine ID-attestation values a profile vouches for, as owned strings copied out of the config
++// push. An empty value means the profile declines that id — the matching request tag is dropped
++// rather than rewritten, the same semantics as destroyAttestationIds().
++struct AttestIdValues {
++  std::string brand, device, product, serial, imei, imei2, meid, manufacturer, model;
++
++  bool any() const {
++    return !brand.empty() || !device.empty() || !product.empty() || !serial.empty() ||
++           !imei.empty() || !imei2.empty() || !meid.empty() || !manufacturer.empty() ||
++           !model.empty();
++  }
++};
++
+ // A configured profile: its per-level TAs, the package names routed to it, and whether it patches the
+ // real hardware attestation (patch mode) or mints the whole key in the TA (generation mode).
+ struct Profile {
+@@ -69,6 +82,12 @@ struct Profile {
+   std::vector<TargetPackage> packages;
+   std::vector<int32_t> uids;  // resolved caller uids, for requests that carry no app-id to match
+   bool patch_mode = false;
++  // What ID attestation this profile answers with: explicit deviceIds values, else the harvest
++  // baseline the daemon resolved (Resolver.kt falls back per-id). has_ids is false only when the
++  // daemon supplied no value at all — the same shape as a never-provisioned device, which declines
++  // ID attestation entirely.
++  AttestIdValues ids;
++  bool has_ids = false;
+ 
+   // The TA that serves requests arriving at `level`. Software-level KeyMint is never wrapped, so any
+   // non-StrongBox level maps to the TrustedEnvironment instance.
+@@ -145,9 +164,13 @@ struct ForwardGuard {
+ 
+ // The profile matched to this request by its ATTESTATION_APPLICATION_ID: the TA to serve it with and
+ // whether that profile is in patch mode. `ta` is null when the request is not for any target app.
++// The ID values are an OWNED copy taken under the config lock: the live profile vector is swapped by
++// config commits, so a borrowed pointer could dangle between the match and its use below.
+ struct RequestTarget {
+   TaPtr ta;
+   bool patch_mode = false;
++  AttestIdValues ids;
++  bool has_ids = false;
+ };
+ 
+ RequestTarget ProfileForRequest(const std::vector<KeyParameter>& params, uid_t caller_uid,
+@@ -174,7 +197,7 @@ RequestTarget ProfileForRequest(const std::vector<KeyParameter>& params, uid_t c
+                pkg.name.c_str(), prof.id.c_str(), pkg.user_id, caller_user);
+           continue;
+         }
+-        return {prof.TaFor(level), prof.patch_mode};
++        return {prof.TaFor(level), prof.patch_mode, prof.ids, prof.has_ids};
+       }
+     }
+   }
+@@ -184,13 +207,80 @@ RequestTarget ProfileForRequest(const std::vector<KeyParameter>& params, uid_t c
+   if (caller_uid != static_cast<uid_t>(-1)) {
+     for (const auto& prof : g_profiles) {
+       for (int32_t uid : prof.uids) {
+-        if (static_cast<uid_t>(uid) == caller_uid) return {prof.TaFor(level), prof.patch_mode};
++        if (static_cast<uid_t>(uid) == caller_uid)
++          return {prof.TaFor(level), prof.patch_mode, prof.ids, prof.has_ids};
+       }
+     }
+   }
+   return {};
+ }
+ 
++// True when any ATTESTATION_ID_* tag rides on the request. keystore2 only adds those for an explicit
++// ID-attestation request (device-properties attestation), so the copy in generateKey is made then
++// and only then.
++bool RequestsAttestationIds(const std::vector<KeyParameter>& params) {
++  for (const auto& p : params) {
++    switch (p.tag) {
++      case Tag::ATTESTATION_ID_BRAND:
++      case Tag::ATTESTATION_ID_DEVICE:
++      case Tag::ATTESTATION_ID_PRODUCT:
++      case Tag::ATTESTATION_ID_SERIAL:
++      case Tag::ATTESTATION_ID_IMEI:
++      case Tag::ATTESTATION_ID_SECOND_IMEI:
++      case Tag::ATTESTATION_ID_MEID:
++      case Tag::ATTESTATION_ID_MANUFACTURER:
++      case Tag::ATTESTATION_ID_MODEL:
++        return true;
++      default:
++        break;
++    }
++  }
++  return false;
++}
++
++// Rewrite the request's ATTESTATION_ID_* values to the profile's before an in-process TA sees them.
++//
++// Why: keystore2 fills these tags with the REAL device's identity (Build fields + telephony ids) on
++// behalf of the caller, while our TA holds the profile's identity — the reference TA answers that
++// mismatch with ErrorCode::CANNOT_ATTEST_IDS (-66), the failure every ID-attesting app showed once
++// its package entered the scope. With the values aligned the gate passes, and the leaf attests the
++// identity the profile already carries — the resign path patches the very same values into the
++// certificate, so the request never carried a claim the answer would contradict. A tag the profile
++// has no value for is dropped: the TA then attests no id there rather than failing the whole key.
++// Requests that continue to the real HAL (patch mode, foreign attest key) must keep the real values
++// — the real TA holds the real ids and would fail on ours.
++std::vector<KeyParameter> RetargetAttestationIds(const std::vector<KeyParameter>& params,
++                                                 const AttestIdValues& ids) {
++  std::vector<KeyParameter> out;
++  out.reserve(params.size());
++  for (const auto& p : params) {
++    const std::string* v = nullptr;
++    switch (p.tag) {
++      case Tag::ATTESTATION_ID_BRAND: v = &ids.brand; break;
++      case Tag::ATTESTATION_ID_DEVICE: v = &ids.device; break;
++      case Tag::ATTESTATION_ID_PRODUCT: v = &ids.product; break;
++      case Tag::ATTESTATION_ID_SERIAL: v = &ids.serial; break;
++      case Tag::ATTESTATION_ID_IMEI: v = &ids.imei; break;
++      case Tag::ATTESTATION_ID_SECOND_IMEI: v = &ids.imei2; break;
++      case Tag::ATTESTATION_ID_MEID: v = &ids.meid; break;
++      case Tag::ATTESTATION_ID_MANUFACTURER: v = &ids.manufacturer; break;
++      case Tag::ATTESTATION_ID_MODEL: v = &ids.model; break;
++      default: break;
++    }
++    if (!v) {
++      out.push_back(p);
++      continue;
++    }
++    if (v->empty()) continue;  // profile declines this id: drop the tag, attest nothing there
++    KeyParameter q = p;
++    if (q.value.getTag() == KeyParameterValue::blob) {
++      q.value.set<KeyParameterValue::blob>(std::vector<uint8_t>(v->begin(), v->end()));
++    }
++    out.push_back(std::move(q));
++  }
++  return out;
++}
++
+ // How long an operation on one of our own key blobs waits for the daemon's first config push.
+ constexpr auto kConfigWait = std::chrono::seconds(8);
+ 
+@@ -707,6 +797,17 @@ class TeesimKeyMintDevice : public BnKeyMintDevice {
+       }
+       return Status(-100);
+     }
++    // ID-attestation gate (CANNOT_ATTEST_IDS): requests served by OUR TA get their ATTESTATION_ID_*
++    // values rewritten to the profile's identity first; requests that continue to the real HAL
++    // (patch mode, foreign attest key) keep the real values the real TA expects. See
++    // RetargetAttestationIds for the full mechanics.
++    const bool retarget_ids = t.has_ids && RequestsAttestationIds(keyParams);
++    auto serveTa = [&](::Ta* ta, const std::optional<AttestationKey>& ak) {
++      if (!retarget_ids) return Simulate(ta, keyParams, ak, out);
++      std::vector<KeyParameter> rp = RetargetAttestationIds(keyParams, t.ids);
++      LOGI("generateKey: ID-attestation tags rewritten to the profile's identity");
++      return Simulate(ta, rp, ak, out);
++    };
+     // Creating an ATTESTATION KEY (ATTEST_KEY purpose) always mints it in the TA (ours). Unless the
+     // caller named one of our keys as its attest key (the "ours" case just below), we ignore any
+     // injected attest key and self-attest the new key under the keybox. This MUST come before the
+@@ -725,10 +826,10 @@ class TeesimKeyMintDevice : public BnKeyMintDevice {
+       // cannot re-root anyway.
+       if (attestationKey && IsOurs(attestationKey->keyBlob)) {
+         LOGI("generateKey: attest-key creation attested by our attest key; signing its leaf with it (preserving the A->B chain)");
+-        return Simulate(t.ta.get(), keyParams, attestationKey, out);
++        return serveTa(t.ta.get(), attestationKey);
+       }
+       LOGI("generateKey: attest-key creation -> forced generation in the TA (no usable injected attest key)");
+-      return Simulate(t.ta.get(), keyParams, std::nullopt, out);
++      return serveTa(t.ta.get(), std::nullopt);
+     }
+     // A leaf that carries an attest key: keystore2 appends that attest key's OWN stored certificate chain
+     // to the leaf we return, so we emit ONLY the leaf, never extra certificates.
+@@ -738,7 +839,7 @@ class TeesimKeyMintDevice : public BnKeyMintDevice {
+         // appends the attest key's own keybox chain. This is the path an app hits once its attest key
+         // was generated by us above.
+         LOGI("generateKey: attest key is ours; signing the leaf with it (no extra certs)");
+-        return Simulate(t.ta.get(), keyParams, attestationKey, out);
++        return serveTa(t.ta.get(), attestationKey);
+       }
+       // Foreign attest key on a leaf — an RKP key keystore2 injected for a bare challenge, or one made
+       // before we covered the app. Forward so the real hardware signs the leaf and keystore2 appends the
+@@ -762,7 +863,7 @@ class TeesimKeyMintDevice : public BnKeyMintDevice {
+       return PatchAttest(t.ta.get(), keyParams, out);
+     }
+     LOGI("generateKey: generation mode for target app");
+-    return Simulate(t.ta.get(), keyParams, attestationKey, out);
++    return serveTa(t.ta.get(), attestationKey);
+   }
+ 
+   ndk::ScopedAStatus importKey(const std::vector<KeyParameter>& keyParams, KeyFormat keyFormat,
+@@ -1197,6 +1298,25 @@ extern "C" bool teesim_cfg_add_profile(const TsProfile* p) {
+   prof.ta_tee = WrapTa(ta_tee);
+   prof.ta_strongbox = WrapTa(ta_sb);
+   prof.patch_mode = p->mode && std::string(p->mode) == "patch";
++  // Own a copy of the profile's ID-attestation values: the TsProfile borrow only lives for this
++  // call, and generateKey rewrites request tags from these after the swap (see
++  // RetargetAttestationIds). Null spans become empty strings, i.e. "declines that id".
++  if (p->ids) {
++    const TsDeviceIds* d = p->ids;
++    auto own = [](const uint8_t* b, size_t n) {
++      return std::string(b ? reinterpret_cast<const char*>(b) : "", n);
++    };
++    prof.ids.brand = own(d->brand, d->brand_len);
++    prof.ids.device = own(d->device, d->device_len);
++    prof.ids.product = own(d->product, d->product_len);
++    prof.ids.serial = own(d->serial, d->serial_len);
++    prof.ids.imei = own(d->imei, d->imei_len);
++    prof.ids.imei2 = own(d->imei2, d->imei2_len);
++    prof.ids.meid = own(d->meid, d->meid_len);
++    prof.ids.manufacturer = own(d->manufacturer, d->manufacturer_len);
++    prof.ids.model = own(d->model, d->model_len);
++    prof.has_ids = prof.ids.any();
++  }
+   // Seed both instances with the device-wide MODULE_HASH so a generation-mode key either mints carries
+   // the tag, independent of keystore2's one-shot delivery. Prefer keystore2's captured bytes; fall
+   // back to the daemon's computed value when we never saw that call. The reference TA emits the tag

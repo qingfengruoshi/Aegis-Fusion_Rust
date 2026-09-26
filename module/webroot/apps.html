@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Offline by contract: nothing external may ever load. All CSS is local. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'">
+<title>受保护的应用 · Aegis Fusion</title>
+<link rel="stylesheet" href="css/launcher.css">
+</head>
+<body class="page-apps">
+<main class="wrap">
+
+    <header class="ap-head">
+        <a class="ap-back" href="./index.html" aria-label="返回主页">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </a>
+        <div class="ap-head-body">
+            <h1>受保护的应用</h1>
+            <p class="ap-sub">勾选 = 添加保护，取消勾选 = 移除，保存后立即生效</p>
+        </div>
+        <button class="ap-dots" id="menu-btn" type="button" aria-label="设置" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
+            </svg>
+        </button>
+    </header>
+
+    <!-- Settings expand inline below the header (never overlays the list) -->
+    <div class="ap-menu" id="menu" hidden>
+        <button class="ap-menu-item" id="opt-autoadd" type="button" role="menuitemcheckbox" aria-checked="false">
+            <span class="ap-menu-check" aria-hidden="true">✓</span>
+            <span class="ap-menu-label">自动纳入新安装的应用<small>TEES 原生能力：仅自动纳入模块首次运行之后新装的应用，立即生效</small></span>
+        </button>
+        <p class="ap-menu-note">设置自动保存，在页面之间保持有效。</p>
+    </div>
+
+    <input class="ap-search" id="search" type="search" placeholder="搜索应用名或包名" autocomplete="off">
+
+    <!-- Filter chips (modeled on the TEESimulator scope filters).
+         "系统" mirrors the legacy show-system flag; "已选" is session-only. -->
+    <div class="ap-chips" id="chips" role="group" aria-label="列表过滤">
+        <button class="ap-chip" id="chip-all" type="button" aria-pressed="true">全部</button>
+        <button class="ap-chip" id="chip-system" type="button" aria-pressed="false">系统</button>
+        <button class="ap-chip" id="chip-selected" type="button" aria-pressed="false">已选</button>
+    </div>
+
+    <!-- Protected-but-uninstalled entries (orphans): visible, removable. -->
+    <div class="ap-orphans" id="orphans" hidden></div>
+
+    <!-- Batch actions over the currently visible rows -->
+    <div class="ap-ops" id="ops" hidden>
+        <button class="ap-ops-btn" id="ops-all" type="button">全选</button>
+        <button class="ap-ops-btn" id="ops-invert" type="button">反选</button>
+        <button class="ap-ops-btn" id="ops-clear" type="button">清除</button>
+    </div>
+
+    <p class="hint" id="cfg-hint" hidden></p>
+
+    <div class="ap-list" id="list" aria-live="polite"></div>
+
+    <p class="hint off" id="err" hidden></p>
+    <footer class="foot">
+        <p class="fine"><span id="count">已选 0 个应用</span><span id="src-hint" hidden> · 离线列表（仅包名）</span><span id="icon-hint" hidden></span></p>
+    </footer>
+</main>
+
+<!-- Floating save: appears only while the ticked set differs from the saved scope -->
+<button class="ap-fab" id="save-fab" type="button" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 6L9 17l-5-5"/>
+    </svg>
+    <span>保存更改</span>
+</button>
+
+<script src="js/conf.js"></script>
+<script src="js/apps.js"></script>
+</body>
+</html>

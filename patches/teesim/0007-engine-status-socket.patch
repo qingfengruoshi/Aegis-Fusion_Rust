@@ -1,0 +1,62 @@
+diff --git a/app/src/main/java/org/matrix/teesim/Control.kt b/app/src/main/java/org/matrix/teesim/Control.kt
+index 8f75fbf..bdddde3 100644
+--- a/app/src/main/java/org/matrix/teesim/Control.kt
++++ b/app/src/main/java/org/matrix/teesim/Control.kt
+@@ -34,6 +34,18 @@ object Control {
+     private var seq = 0L
+     @Volatile private var running = false
+ 
++    // Fusion (0007): in-memory push/ack state, exposed via KeyAdmin /status so the
++    // shell-side verdict works on devices where logcat is disabled and the durable
++    // trace LogTail mirrors is structurally empty. Epoch seconds; 0 = never.
++    @Volatile var lastPushEpoch: Long = 0L
++        private set
++    @Volatile var lastAckEpoch: Long = 0L
++        private set
++    @Volatile var lastAckApplied: Int = -1
++        private set
++    @Volatile var lastAckFailed: Int = -1
++        private set
++
+     // The live connection's output stream, or null when disconnected — used to send resign requests
+     // outside the writer loop (writeFrame is stream-synchronized, so concurrent sends are safe).
+     @Volatile private var activeOut: OutputStream? = null
+@@ -77,6 +89,7 @@ object Control {
+         synchronized(lock) {
+             latest = configJson
+             seq++
++            lastPushEpoch = System.currentTimeMillis() / 1000
+             lock.notifyAll()
+         }
+     }
+@@ -211,6 +224,9 @@ object Control {
+                     "control: ack epoch=${msg.optLong("epoch")} ok=${msg.optBoolean("ok")} " +
+                         "applied=${msg.optInt("profilesApplied")} failed=${msg.optInt("profilesFailed")}"
+                 )
++                lastAckEpoch = System.currentTimeMillis() / 1000
++                lastAckApplied = msg.optInt("profilesApplied", -1)
++                lastAckFailed = msg.optInt("profilesFailed", -1)
+                 // The ack means the lib has committed the new profile set — the point at which
+                 // pre-existing keys can be re-attested against it. Coalesce bursts of pushes into
+                 // one run and never run it on this reader thread (resign responses arrive here).
+diff --git a/app/src/main/java/org/matrix/teesim/KeyAdmin.kt b/app/src/main/java/org/matrix/teesim/KeyAdmin.kt
+index b64bef1..b6c296b 100644
+--- a/app/src/main/java/org/matrix/teesim/KeyAdmin.kt
++++ b/app/src/main/java/org/matrix/teesim/KeyAdmin.kt
+@@ -416,6 +416,16 @@ object KeyAdmin {
+             "lib",
+             JSONObject().put("hook", Control.libHook ?: JSONObject.NULL).put("api", Control.libApi),
+         )
++        // Fusion (0007): the verdict's socket fallback reads these - on devices with
++        // logcat disabled the durable trace is empty and this is the only signal.
++        o.put("push", JSONObject().put("last", Control.lastPushEpoch))
++        o.put(
++            "ack",
++            JSONObject()
++                .put("last", Control.lastAckEpoch)
++                .put("applied", Control.lastAckApplied)
++                .put("failed", Control.lastAckFailed),
++        )
+         return o
+     }
+ 

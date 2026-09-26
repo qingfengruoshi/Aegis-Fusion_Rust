@@ -1,0 +1,20 @@
+[package]
+name = "fusionctl"
+version = "0.1.0"
+edition = "2021"
+description = "Aegis Fusion RS — management layer (logic re-implemented in Rust; see docs/CONTRACT-*.md)"
+publish = false
+
+# 单一二进制 + 多入口名：装配时把 module/<abi>/fusionctl 软链/硬链成
+# keybox-check 等名字，argv[0] 分发（契约见 docs/CONTRACT-management.md）。
+[[bin]]
+name = "fusionctl"
+path = "src/main.rs"
+
+[dependencies]
+# sha2 = kb_hash 的内容锚点（sha256）。这里的契约是「与 sha256sum 产出一致的
+# 十六进制」——手写密码学原语已被实测证明会出错（见 git 历史：2026-09-21 手写
+# 实现对 71 个长度全部算错），所以用经过审计的标准库。纯 Rust、无系统依赖。
+sha2 = "0.10"
+# 刻意不再引其它库：管理层的判定逻辑全是文本/文件操作。若将来需要 JSON 定点
+# 编辑，再单独评估（见 CONTRACT-management.md §3.11 的重写决策）。

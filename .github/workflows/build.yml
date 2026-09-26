@@ -1,169 +1,284 @@
-name: Build
+name: Build Aegis Fusion RS
+
+# Supply-chain policy (audit M4): every third-party action is pinned to a full
+# commit SHA, not a mutable major tag — `@v4` can be re-pointed by its owner at
+# any time and would silently change what runs in our build. The trailing
+# comment records the human-readable tag and the date the SHA was captured.
+# To bump: look up the new tag's commit SHA (GitHub API: /repos/<owner>/<repo>
+# /commits/<tag>) and update both the SHA and the comment in one commit.
+# setup-java is on v5 because upstream deprecated v4 (it no longer receives
+# updates); v5 keeps the same distribution/java-version inputs.
 
 on:
-  push:
-    branches: [ "main" ]
-    paths-ignore: [ '**.md' ]
-  pull_request:
-    branches: [ "main" ]
-    paths-ignore: [ '**.md' ]
   workflow_dispatch:
+    inputs:
+      variant:
+        description: "Optional build label appended to the version (alnum/dash, e.g. exp / hotfix / test)"
+        required: false
+        default: ""
+  push:
+    branches: [main, master]
+    tags: ["v*"]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: write
+
+env:
+  TEESIM_NDK_VERSION: "28.2.13676358"
+  # audit 2026-09-18: pinned to the version that built the v1.0.0 candidate
+  # (captured from the CI toolchain echo). rustup auto-installs it on runners.
+  RUSTUP_TOOLCHAIN: "1.98.1"
 
 jobs:
-  build:
+  fusion:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: "recursive"
-          fetch-depth: 0
+      - name: Check out the fusion repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (2026-07-16)
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Pin BoringSSL (native build input)
+        run: |
+          # audit 2026-09-18: openssl-sys bindgens the FFI against BoringSSL
+          # headers; build.sh clones boringssl main (floating) when BORINGSSL
+          # is unset, and a header change moves the bindgen output -> codegen
+          # drift. Pin the commit; the bootstrap prints it once so it can be
+          # committed (build-fingerprint-boringssl.txt) and frozen.
+          if [ -s build-fingerprint-boringssl.txt ]; then
+            COMMIT="$(cat build-fingerprint-boringssl.txt)"
+            echo "boringssl: pinned commit $COMMIT"
+          else
+            COMMIT="$(git ls-remote https://boringssl.googlesource.com/boringssl refs/heads/main | cut -f1)"
+            echo "$COMMIT" > build-fingerprint-boringssl.txt
+            echo "boringssl: BOOTSTRAP - main is at $COMMIT"
+            echo "!! commit build-fingerprint-boringssl.txt to freeze this pin"
+          fi
+          git clone -q --depth 1 https://boringssl.googlesource.com/boringssl "$RUNNER_TEMP/boringssl"
+          git -C "$RUNNER_TEMP/boringssl" checkout -q "$COMMIT"
+          echo "boringssl resolved: $(git -C "$RUNNER_TEMP/boringssl" rev-parse HEAD)"
+          echo "BORINGSSL=$RUNNER_TEMP/boringssl" >> "$GITHUB_ENV"
+
+      - name: Verify the build fingerprint
+        run: |
+          # FAIL-CLOSED (audit 2026-09-18): the cargo cache key hashes
+          # build-fingerprint.env instead of versions.env (so a version bump no
+          # longer forces a non-reproducible Rust rebuild). That only stays
+          # correct if the engine pin in the two files is identical — a
+          # forgotten edit would silently reuse a stale native cache.
+          set -euo pipefail
+          . ./versions.env
+          . ./build-fingerprint.env
+          if [ "$TEESIM_REF" != "$FINGERPRINT_REF" ]; then
+            echo "!! build-fingerprint.env TEESIM_REF ($FINGERPRINT_REF) != versions.env TEESIM_REF ($TEESIM_REF)" >&2
+            echo "!! update build-fingerprint.env when bumping the engine pin" >&2
+            exit 1
+          fi
+          echo "engine pin matches build-fingerprint.env: $TEESIM_REF"
+
+      - name: Fetch and patch upstream
+        run: bash scripts/fetch-upstreams.sh
+
+      - name: Syntax-check scripts and WebUI
+        run: |
+          for f in module/*.sh scripts/*.sh; do bash -n "$f"; done
+          # /bin/sh on the runners is dash: the module scripts are invoked via
+          # `sh` on-device too, so a bash-only parse (e.g. "(((" arithmetic
+          # without spaces) must fail here, not at flash time.
+          for f in module/*.sh; do sh -n "$f"; done
+          node --check module/webroot/js/launcher.js
+          node --check module/webroot/js/apps.js
+          node scripts/test-webui.js
+          node scripts/test-apps.js
+          node scripts/test-logs.js
+          bash scripts/test-pif-sync.sh
+          bash scripts/test-pif-fetch.sh
+          bash scripts/test-keybox-fetch.sh
+          bash scripts/test-keybox-check.sh
+          bash scripts/test-engine-verdict.sh
+          bash scripts/test-interval-rule.sh
+          bash scripts/test-apps-sync.sh
+          bash scripts/test-service-props.sh
+          # audit r5: the device-id mask has four copies (three shell + one JS)
+          # and they must stay identical — the export lands on world-readable
+          # /sdcard/Download, so one stale copy re-opens the H1 leak.
+          bash scripts/test-mask-ids.sh
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build golang-go clang libclang-dev zip unzip
+
+      - name: Accept Android SDK licenses
+        # android-actions/setup-android@v3 fails on current runner images: after
+        # swapping in a fresh cmdline-tools it still requests the long-removed
+        # "tools" package ("Failed to find package 'tools'", sdkmanager exit 1).
+        # The runner ships the SDK but does NOT put sdkmanager on PATH, so call
+        # it by its absolute path — and drop one third-party action from the
+        # supply chain while we are at it (audit M4 direction).
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$SDKM" --version
+          yes | "$SDKM" --licenses > /dev/null || true
+
+      - name: Install SDK / NDK components
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$SDKM" --install \
+            "ndk;${TEESIM_NDK_VERSION}" \
+            "cmake;3.22.1" \
+            "build-tools;36.0.0" \
+            "platforms;android-36"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5 (2026-07-31)
         with:
           distribution: temurin
-          java-version: 21
-          cache: 'gradle'
+          java-version: "21"
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Set up Rust
+        run: |
+          rustup target add aarch64-linux-android x86_64-linux-android
+          # Pinned for reproducibility, mirroring TEESimulator's CI.
+          cargo install cargo-ndk --version 4.1.2 --locked
 
-      - name: Cache Rust artifacts
-        uses: actions/cache@v4
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (2025-09-24)
         with:
           path: |
             ~/.cargo/registry
-            ~/.cargo/git
-            ~/.cargo/bin/cargo-ndk
-            native-certgen/target
-          key: rust-${{ runner.os }}-${{ hashFiles('native-certgen/Cargo.lock') }}
-          restore-keys: rust-${{ runner.os }}-
+            upstream/TEESimulator/rust/target
+          # hashFiles('upstream/...') can never match at checkout time (upstream/
+          # is created by fetch-upstreams.sh later), so that key always missed.
+          #
+          # audit 2026-09-18: key on the NATIVE build inputs only —
+          # build-fingerprint.env (engine pin) + patches/teesim/** — plus the
+          # NDK version. Previously the whole versions.env was hashed, so every
+          # FUSION_VERSION bump busted the cache and forced a non-reproducible
+          # Rust rebuild (byte drift); an NDK bump conversely did NOT bust it.
+          key: cargo-${{ hashFiles('build-fingerprint.env', 'patches/teesim/**') }}-${{ env.TEESIM_NDK_VERSION }}
 
-      - name: Install cargo-ndk
-        run: command -v cargo-ndk || cargo install cargo-ndk
-
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ccache-${{ runner.os }}-${{ github.ref_name }}
-          restore-keys: |
-            ccache-${{ runner.os }}-${{ github.ref_name }}
-            ccache-${{ runner.os }}-
-            ccache-
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build with Gradle
+      - name: Build TEESimulator
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.TEESIM_NDK_VERSION }}
+          CARGO_INCREMENTAL: "0"
+          RUSTFLAGS: "--remap-path-prefix=${{ github.workspace }}=/src"
         run: |
-          chmod +x ./gradlew
-          ./gradlew zipRelease zipDebug -Porg.gradle.parallel=true -Porg.gradle.vfs.watch=true -Dorg.gradle.jvmargs=-Xmx2048m
+          # Toolchain versions are printed so they can be pinned deliberately
+          # later (build reproducibility: rustc/clang drift is what makes the
+          # native libraries non-bit-reproducible between cache misses).
+          #
+          # Reproducibility (audit 2026-09-18): freeze the dependency set and
+          # normalize the embedded build paths. The lock file is committed at
+          # patches/teesim/Cargo.lock; while bootstrapping (first run) it is
+          # generated and printed for capture.
+          # NOTE: this block runs from the repo root - the crate lives at
+          # upstream/TEESimulator/rust (the cd into it happens below).
+          if [ -s "$GITHUB_WORKSPACE/patches/teesim/Cargo.lock" ]; then
+            cp "$GITHUB_WORKSPACE/patches/teesim/Cargo.lock" upstream/TEESimulator/rust/Cargo.lock
+            echo "cargo: using the committed Cargo.lock (dependency set frozen)"
+          else
+            (cd upstream/TEESimulator/rust && cargo generate-lockfile)
+            echo "=== BEGIN Cargo.lock (commit as patches/teesim/Cargo.lock) ==="
+            cat upstream/TEESimulator/rust/Cargo.lock
+            echo "=== END Cargo.lock ==="
+          fi
+          echo "toolchain: $(rustc --version 2>/dev/null || echo 'rustc?')"
+          echo "toolchain: $(cargo --version 2>/dev/null || echo 'cargo?')"
+          echo "toolchain: ndk=${{ env.TEESIM_NDK_VERSION }}"
+          clang_bin="$(ls "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/clang 2>/dev/null | head -1)"
+          if [ -n "$clang_bin" ]; then
+            echo "toolchain: $("$clang_bin" --version | head -1)"
+          else
+            echo "toolchain: clang not found under $ANDROID_NDK_HOME"
+          fi
+          cd upstream/TEESimulator
+          chmod +x gradlew
+          ./gradlew zipRelease
 
-      - name: Read version
-        id: ver
+      - name: Compute the fusion version
+        env:
+          # SECURITY (audit 2026-09-18): the dispatch input MUST arrive via env,
+          # never interpolated into the script text — '${{ ... }}' inside run:
+          # is rendered before the shell parses, so a quote in the value could
+          # break out and execute arbitrary commands on the runner (proven by
+          # adversarial test). env vars are data, not code.
+          RAW_VARIANT: ${{ github.event.inputs.variant }}
         run: |
-          ver=$(grep 'val verName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
-          count=$(git rev-list HEAD --count)
-          echo "version=${ver}-${count}" >> "$GITHUB_OUTPUT"
+          . ./versions.env
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # Release build: tag name + the release marker. The marker keeps
+            # official releases unmistakable from the ever-growing pile of CI
+            # builds (v1.0.0-<sha> / v1.0.0-<variant>-<sha>).
+            VERSION="${GITHUB_REF_NAME#v}"
+            VERSION="v${VERSION}-GA"
+          else
+            # Optional build variant label (manual dispatch only): sanitized to
+            # [A-Za-z0-9-] and capped, since it lands in module.prop and the zip
+            # / artifact filenames. Order: version-variant-shortsha.
+            VARIANT="$(printf '%s' "$RAW_VARIANT" | tr -cd 'A-Za-z0-9-' | cut -c1-20)"
+            VERSION="${FUSION_VERSION}"
+            [ -n "$VARIANT" ] && VERSION="${VERSION}-${VARIANT}"
+            VERSION="${VERSION}-$(git rev-parse --short HEAD)"
+          fi
+          echo "FUSION_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "FUSION_VERSION_CODE=$(date +%Y%m%d)" >> "$GITHUB_ENV"
 
-      - name: List build artifacts
+      - name: Assemble the fusion module
         run: |
-          echo "Release: $(ls out/*Release*.zip | head -1) ($(du -h out/*Release*.zip | head -1 | cut -f1))"
-          echo "Debug: $(ls out/*Debug*.zip | head -1) ($(du -h out/*Debug*.zip | head -1 | cut -f1))"
+          TEESIM_ZIP="$(ls upstream/TEESimulator/out/TEESimulator-*-Release.zip)"
+          PIFORK_ZIP="$(ls upstream/PlayIntegrityFork-*.zip)"
+          mkdir -p out
+          bash scripts/assemble.sh "$TEESIM_ZIP" "$PIFORK_ZIP" module \
+            "out/AegisFusionRS-${FUSION_VERSION}.zip"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: TEESimulator-RS-release-zip
-          path: out/TEESimulator-RS-*-Release.zip
-          retention-days: 30
-          compression-level: 0
+      # Audit R7-4/M4: ship a SHA256 checksum next to the zip so the artifact
+      # can be verified end-to-end (r8 baseline was verified by hand; this
+      # makes it reproducible for every build, branch and tag alike).
+      - name: Generate SHA256 checksum
+        run: |
+          cd out
+          for z in AegisFusionRS-*.zip; do
+            sha256sum "$z" > "$z.sha256"
+          done
+          cat AegisFusionRS-*.sha256
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload the module as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 (2025-03-19)
         with:
-          name: TEESimulator-RS-debug-zip
-          path: out/TEESimulator-RS-*-Debug.zip
-          retention-days: 7
-          compression-level: 0
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-mappings
-          path: app/build/outputs/mapping/release
-          retention-days: 30
+          name: AegisFusionRS_${{ env.FUSION_VERSION }}
+          path: out/AegisFusionRS-*
+          if-no-files-found: error
           compression-level: 9
 
-  release:
-    needs: build
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Read version
-        id: ver
-        run: |
-          ver=$(grep 'val verName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
-          count=$(git rev-list HEAD --count)
-          echo "version=${ver}-${count}" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: TEESimulator-RS-release-zip
-          path: zips
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: TEESimulator-RS-debug-zip
-          path: zips
-
-      - name: Extract changelog
-        run: |
-          ver="${VER#v}"
-          awk "/^## TEESimulator-RS v${ver%%-*}/{flag=1; next} /^## TEESimulator-RS v/{if(flag) exit} flag" module/changelog.md > /tmp/notes.md
-          cat /tmp/notes.md
+      - name: Publish release
+        if: github.ref_type == 'tag'
         env:
-          VER: ${{ steps.ver.outputs.version }}
-
-      - name: Create release
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
         run: |
-          gh release delete "$VER" --yes 2>/dev/null || true
-          RELEASE=$(ls zips/*Release*.zip | head -1)
-          DEBUG=$(ls zips/*Debug*.zip | head -1)
-          gh release create "$VER" \
-            --title "$VER" \
+          set -euo pipefail
+          # Audit R7-7: release notes = ONLY this tag's CHANGELOG section,
+          # not the entire history. CHANGELOG sections are "# vX.Y.Z ..." headers;
+          # print from the matching header until the next "# v" header (or EOF).
+          # LAST matching section wins: the internal CHANGELOG history also
+          # contains a '# v1.0.0' heading (line 1) that predates the public
+          # release, so a first-match extraction would publish the ancient
+          # notes for the tag. Reset the buffer on every tag match; sections
+          # between matches are skipped.
+          notes="$(printf '# Aegis Fusion RS %s\n\n' "${TAG}")$(awk -v tag="${TAG}" '
+            /^# v[0-9]/ {
+              if ($0 ~ "^# " tag "( |$)") { capturing = 1; buf = "" } else { capturing = 0 }
+              next
+            }
+            capturing { buf = buf $0 "\n" }
+            END { printf "%s", buf }
+          ' CHANGELOG.md)"
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+            echo "!! CHANGELOG has no section for ${TAG} — falling back to full file" >&2
+            notes="$(cat CHANGELOG.md)"
+          fi
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" \
             --latest \
-            --notes-file /tmp/notes.md \
-            "$RELEASE" \
-            "$DEBUG"
-        env:
-          VER: ${{ steps.ver.outputs.version }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bump update.json
-        run: |
-          COUNT=$(git rev-list HEAD --count)
-          RELEASE_NAME=$(basename zips/*Release*.zip)
-          ZIP_URL="https://github.com/${{ github.repository }}/releases/download/${VER}/${RELEASE_NAME}"
-          jq ".versionCode = $COUNT | .zipUrl = \"$ZIP_URL\"" module/update.json > /tmp/update.json
-          mv /tmp/update.json module/update.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add module/update.json
-          git diff --cached --quiet || {
-            git commit -m "chore(release): bump update.json to $VER [skip ci]"
-            git push origin HEAD:main
-          }
-        env:
-          VER: ${{ steps.ver.outputs.version }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            --title "Aegis Fusion RS ${TAG}" \
+            --notes "$notes" \
+            out/AegisFusionRS-*

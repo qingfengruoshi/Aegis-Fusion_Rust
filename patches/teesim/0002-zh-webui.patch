@@ -1,0 +1,517 @@
+diff --git a/module/webroot/index.html b/module/webroot/index.html
+index feec52b..a89ac91 100644
+--- a/module/webroot/index.html
++++ b/module/webroot/index.html
+@@ -1,5 +1,5 @@
+ <!DOCTYPE html>
+-<html lang="en">
++<html lang="zh-CN">
+ <head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+@@ -17,7 +17,7 @@
+   <span class="topbar-title">TEESimulator</span>
+   <span id="health" class="healthpill" role="status" aria-live="polite">
+     <span class="dot"></span>
+-    <span class="healthpill-label">checking…</span>
++    <span class="healthpill-label">检测中…</span>
+   </span>
+ </header>
+ 
+@@ -34,27 +34,27 @@
+ <!-- Fixed bottom navigation. Switching destinations mints no history entry (see
+      js/nav.js), so Android Back never cycles these. Icons are inline SVG — nothing
+      external loads. app.js sets aria-current on the active item. -->
+-<nav class="bottomnav" aria-label="Sections">
++<nav class="bottomnav" aria-label="导航">
+   <button class="navitem" type="button" data-nav="config">
+     <svg class="navicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="6.5" rx="2"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2"/></svg>
+-    <span class="navlabel">Profiles</span>
++    <span class="navlabel">配置</span>
+   </button>
+   <button class="navitem" type="button" data-nav="keyboxes">
+     <svg class="navicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>
+-    <span class="navlabel">Keyboxes</span>
++    <span class="navlabel">密钥盒</span>
+   </button>
+   <button class="navitem" type="button" data-nav="keys">
+     <svg class="navicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.9 12.1 20 3"/><path d="M17 6l2.5 2.5"/><path d="M14.5 8.5 17 11"/></svg>
+-    <span class="navlabel">Keys</span>
++    <span class="navlabel">密钥</span>
+   </button>
+   <button class="navitem" type="button" data-nav="system">
+     <svg class="navicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2.5 7 5-14 2.5 7h4"/></svg>
+-    <span class="navlabel">System</span>
+-    <span id="update-badge" class="badge" hidden aria-label="update available"></span>
++    <span class="navlabel">系统</span>
++    <span id="update-badge" class="badge" hidden aria-label="有可用更新"></span>
+   </button>
+   <button class="navitem" type="button" data-nav="logs">
+     <svg class="navicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13.5 15H17"/></svg>
+-    <span class="navlabel">Logs</span>
++    <span class="navlabel">日志</span>
+   </button>
+ </nav>
+ 
+diff --git a/module/webroot/js/app.js b/module/webroot/js/app.js
+index 818c560..86cd7ab 100644
+--- a/module/webroot/js/app.js
++++ b/module/webroot/js/app.js
+@@ -18,6 +18,7 @@ import { create as createKeyboxes } from "./controllers/keybox-controller.js";
+ import { create as createKeys } from "./controllers/keyadmin-controller.js";
+ import { create as createSystem } from "./controllers/system-controller.js";
+ import { create as createLogs } from "./controllers/logs-controller.js";
++import { t } from "./ui/i18n.js";
+ 
+ // --- global diagnostics (inspect via Chrome DevTools, chrome://inspect) ---
+ // Surface every uncaught error and rejected promise, so a failure anywhere in the WebUI
+@@ -42,7 +43,7 @@ function setHealth(status) {
+   const ok = !!(status && status.reachable);
+   dot.classList.toggle("ok", ok);
+   dot.classList.toggle("off", !ok);
+-  label.textContent = ok ? "running" : "unreachable";
++  label.textContent = ok ? t("running") : t("unreachable");
+ }
+ 
+ function setBadge(on) {
+diff --git a/module/webroot/js/ui/dom.js b/module/webroot/js/ui/dom.js
+index 9b12b90..c426c20 100644
+--- a/module/webroot/js/ui/dom.js
++++ b/module/webroot/js/ui/dom.js
+@@ -7,6 +7,7 @@
+ // HTML strings (which also keeps user text out of any innerHTML path).
+ 
+ import { pushOverlay, closeOverlay } from "./nav.js";
++import { t } from "./i18n.js";
+ 
+ // el("div", {class:"card", onclick:fn}, [childNode, "text", ...])
+ // attrs: className via `class`; DOM event handlers as on<Event> functions;
+@@ -16,16 +17,17 @@ export function el(tag, attrs = {}, children = []) {
+   for (const [k, v] of Object.entries(attrs || {})) {
+     if (v == null || v === false) continue;
+     if (k === "class") node.className = v;
+-    else if (k === "text") node.textContent = v; // always textContent — user text never touches innerHTML
++    else if (k === "text") node.textContent = t(v); // always textContent — user text never touches innerHTML
+     else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2).toLowerCase(), v);
+     else if (k === "value") node.value = v;
+     else if (k === "checked" || k === "disabled" || k === "selected") node[k] = !!v;
++    else if (k === "title" || k === "placeholder" || k === "aria-label") node.setAttribute(k, t(String(v)));
+     else node.setAttribute(k, v);
+   }
+   const kids = Array.isArray(children) ? children : [children];
+   for (const c of kids) {
+     if (c == null || c === false) continue;
+-    node.append(c.nodeType ? c : document.createTextNode(String(c)));
++    node.append(c.nodeType ? c : document.createTextNode(t(String(c))));
+   }
+   return node;
+ }
+@@ -68,12 +70,12 @@ export const ICON_SORT = [{ d: "M4 6h16" }, { d: "M6 12h12" }, { d: "M9 18h6" }]
+ 
+ // Transient toast. Owns the #toast host declared in index.html.
+ export function toast(msg) {
+-  const t = document.getElementById("toast");
+-  if (!t) return;
+-  t.textContent = msg;
+-  t.classList.add("show");
+-  clearTimeout(t._timer);
+-  t._timer = setTimeout(() => t.classList.remove("show"), 1900);
++  const box = document.getElementById("toast");
++  if (!box) return;
++  box.textContent = t(msg);
++  box.classList.add("show");
++  clearTimeout(box._timer);
++  box._timer = setTimeout(() => box.classList.remove("show"), 1900);
+ }
+ 
+ // The shared overlay primitive behind every dialog, sheet, and drill-in. It puts
+diff --git a/module/webroot/js/ui/i18n.js b/module/webroot/js/ui/i18n.js
+new file mode 100644
+index 0000000..261745d
+--- /dev/null
++++ b/module/webroot/js/ui/i18n.js
+@@ -0,0 +1,354 @@
++// Simplified-Chinese localization for the TEESimulator WebUI (Integrity Fusion).
++//
++// Design: EVERY piece of UI text in this app funnels through dom.js's el() — either
++// the {text} attr, a string child, or a title/placeholder/aria-label attr. i18n.js
++// exports one function, t(s), that maps an English source string to Chinese:
++//   1. exact match in DICT
++//   2. first matching rule in RULES (for strings composed at runtime, e.g. "3 apps")
++//   3. otherwise the original string, unchanged
++//
++// This keeps the localization OUT of the views: no view file is modified for
++// translation, so upstream changes to views never conflict with this file. Strings
++// upstream renames silently fall back to English instead of breaking the render.
++//
++// Deliberately NOT translated: config tokens (patch / generation / system_property /
++// today / no), keymaster tag names (verifiedBootState, osPatchLevel, ...), security
++// level names (Software / TrustedEnvironment / StrongBox), package names, aliases,
++// log content, and anything a user would match against typed filter syntax
++// (class:generated etc.) — translating those would break matching or mislead.
++
++// ---- exact-match dictionary ---------------------------------------------
++const DICT = {
++  // chrome / navigation
++  "Profiles": "配置", "Keyboxes": "密钥盒", "Keys": "密钥", "System": "系统", "Logs": "日志",
++  "checking…": "检测中…", "running": "运行中", "unreachable": "无法连接",
++
++  // dialogs
++  "Confirm": "确认", "Cancel": "取消", "OK": "确定", "Close": "关闭",
++
++  // config-view
++  "Attestation": "证明", "Patch & OS levels": "补丁与系统版本", "Device identity": "设备身份",
++  "Target apps": "目标应用",
++  "Each overrides one attested device id. Leave a field empty to use the value harvested from the device.":
++    "每项覆盖一个用于证明的设备 ID。留空则使用从本设备采集的值。",
++  "optional": "可选",
++  "not harvested — this tag will be omitted": "未采集——此标签将被省略",
++  "from the device build property; omitted if unset": "取自设备 build 属性；未设置时省略",
++  "Add profile": "新建配置",
++  "No profiles yet. Add one to start attesting for apps.":
++    "还没有配置。新建一个，开始为目标应用提供证明。",
++  "no keybox": "无密钥盒",
++  "Unsaved changes": "有未保存的修改", "Save": "保存", "Ready to save": "可以保存",
++  "Back to profiles": "返回配置列表", "Edit profile": "编辑配置", "Profile name": "配置名称",
++  "Leave a patch, OS, or identity field empty to use the value ":
++    "将补丁、系统版本或身份字段留空，即可使用",
++  "harvested from this device": "从本设备采集的值",
++  ".": "。",
++  "Remove profile": "删除此配置",
++
++  // field.js / schema.js labels & help
++  "Keybox": "密钥盒", "Operation mode": "运行模式",
++  "System patch": "系统补丁", "Vendor patch": "厂商补丁", "Boot patch": "Boot 补丁",
++  "OS version": "系统版本",
++  "Brand": "品牌", "Device": "设备", "Product": "产品", "Manufacturer": "制造商",
++  "Model": "型号", "Serial": "序列号",
++  "Apps": "应用", "Auto-include new apps": "自动纳入新应用",
++  "An *.xml keybox under /data/adb/teesim to sign attestations with.":
++    "位于 /data/adb/teesim 下、用于签名证明的 *.xml 密钥盒。",
++  "patch: keep the real hardware key and re-sign only its attestation with the keybox (fewer detection points; needs a working hardware level). generation: mint the whole key in software. A level whose hardware is unavailable always falls back to generation.":
++    "patch：保留真实硬件密钥，仅用密钥盒重签其证明（检测点更少；需要可用的硬件级别）。generation：完全在软件中生成密钥。硬件不可用的级别总是回退到 generation。",
++  "The apps this profile attests for.": "此配置为其提供证明的应用。",
++  "Targets apps installed after now; existing apps stay untouched. New apps are discovered on a rescan, not watched for live.":
++    "自动纳入今后安装的应用；已有应用不受影响。新应用在重新扫描时才会被发现，而非实时监视。",
++  "no keybox files found": "未找到密钥盒文件",
++  "No apps yet.": "还没有应用。", "Add": "添加",
++  "No apps": "无应用",
++  "Configure scope →": "配置作用域 →",
++  "Auto-include on — no new apps in scope yet.": "自动纳入已开启——暂无新应用进入作用域。",
++
++  // keybox-view
++  "Import": "导入",
++  "No keyboxes yet. Import an *.xml keybox to sign attestations with.":
++    "还没有密钥盒。导入一个 *.xml 密钥盒用于签名证明。",
++  "Rename": "重命名", "Delete": "删除",
++  "Import keybox": "导入密钥盒",
++  "Keybox file": "密钥盒文件", "Save as": "保存为",
++  "The file is copied into /data/adb/teesim; the name field becomes its filename.":
++    "文件将被复制到 /data/adb/teesim；名称输入框的内容将成为文件名。",
++  "Could not inspect this keybox.": "无法解析此密钥盒。",
++  "No <Key> blocks found in this keybox.": "此密钥盒中未找到 <Key> 块。",
++  "Back to keyboxes": "返回密钥盒", "Keybox": "密钥盒",
++  "chain ok": "链有效", "chain broken": "链断裂", "single cert": "单证书",
++  "private key": "含私钥", "no private key": "无私钥",
++  "Revoked by Google": "已被 Google 吊销",
++  "A certificate in this chain is on Google's revocation list — attestations it signs are rejected by Play Integrity.":
++    "此链中的证书位于 Google 吊销列表——其签名的证明会被 Play Integrity 拒绝。",
++  "Chain does not verify": "证书链验证失败",
++  "A certificate signature in this chain is invalid, so it is not a usable attestation chain.":
++    "此链中某张证书的签名无效，因此不是可用的证明链。",
++  "Signed by Google": "Google 签名", "Samsung Knox root": "三星 Knox 根",
++  "AOSP software root": "AOSP 软件根",
++  "Rooted in the AOSP software test key — not a hardware-backed keybox; fails hardware attestation.":
++    "根植于 AOSP 软件测试密钥——不是硬件级密钥盒，无法通过硬件证明。",
++  "Unknown root": "未知根",
++  "revoked": "已吊销", "bad signature": "签名无效", "expired": "已过期", "not yet valid": "尚未生效",
++  "Google root": "Google 根", "AOSP root": "AOSP 根", "Knox root": "Knox 根", "no root": "无根",
++  "unknown root": "未知根",
++  "leaf": "叶子证书", "root": "根证书", "intermediate": "中间证书",
++  "subject": "主题", "issuer": "颁发者", "serial": "序列号", "valid": "有效期",
++  "sigAlg": "签名算法", "revocation": "吊销信息",
++
++  // system-view
++  "Daemon health": "守护进程状态", "Reading status…": "正在读取状态…",
++  "Daemon": "守护进程", "stopped": "已停止",
++  "Interceptor": "拦截器", "active": "已挂接", "not attached": "未挂接", "inactive": "未激活",
++  "Hook": "挂钩", "unknown": "未知",
++  "Daemon status endpoint unreachable.": "守护进程状态接口无法访问。",
++  "The daemon isn't responding yet.": "守护进程尚未响应。",
++  "Harvest": "采集信息", "No harvest record yet.": "暂无采集记录。",
++  "No key was attestable (common on certain models after unlocking the bootloader), so nothing was captured — every value below is synthesized.":
++    "没有任何密钥可用于证明（某些机型解锁 BL 后常见），因此未采集到任何值——以下所有值均为合成。",
++  "StrongBox has no working hardware on this device; keys requested at StrongBox are generated (not patched) at the TEE version.":
++    "此设备的 StrongBox 没有可用硬件；请求 StrongBox 级别的密钥会以 TEE 版本生成（而非修补）。",
++  "Captured": "采集值", "all zero": "全零", "Fabricated": "构造值",
++  "required": "必需", "supplement": "补充", "synthesized": "合成", "edited": "已编辑",
++  "reset": "重置", "64 hex chars": "64 位十六进制",
++  "Update": "更新",
++  "Update status unavailable — daemon unreachable.": "无法获取更新状态——守护进程不可达。",
++  "Checking for updates…": "正在检查更新…",
++  "Installed": "当前版本",
++  "No canary release has been published yet.": "尚未发布 canary 版本。",
++  "On the latest canary.": "已是最新 canary 版本。",
++  "Update available": "有可用更新", "What's new": "更新内容",
++  "Build variant": "构建变体", "Release": "正式版", "Debug": "调试版",
++  "Downloading & flashing…": "正在下载并刷入…",
++  "Installing…": "安装中…", "Install": "安装", "Install failed": "安装失败",
++  "Assets": "附件", "(unnamed)": "（未命名）", "No release notes.": "暂无更新说明。",
++  "release page ↗": "发布页面 ↗",
++
++  // key-view
++  "Stored keys": "已存密钥", "Loading…": "加载中…",
++  "Daemon key capability unavailable.": "守护进程密钥功能不可用。",
++  "The daemon's admin endpoint isn't reachable yet; keys can't be listed.":
++    "守护进程的管理接口尚未就绪，无法列出密钥。",
++  "Key listing is not available on this Android version.": "此 Android 版本不支持查看密钥列表。",
++  "This module hasn't minted any keys for the target apps yet.":
++    "此模块尚未为目标应用生成任何密钥。",
++  "Deleting…": "删除中…",
++  "Play Integrity may be outside TEESimulator's control.":
++    "Play Integrity 可能不在 TEESimulator 的控制范围内。",
++  "No keys.": "无密钥。",
++  "Select filtered": "选中筛选结果", "Select all": "全选", "Unselect all": "取消全选",
++  "Inverse selection": "反选", "Selection actions": "批量选择操作",
++  "Which keys to list": "密钥列表范围",
++  "Spoofed": "已伪装", "All": "全部",
++  "Only keys this module spoofed": "仅显示本模块伪装过的密钥",
++  "Include the apps' own real device keys": "包含应用自身的真实设备密钥",
++  "No real keys to hide": "没有可隐藏的真实密钥",
++  "creating": "创建中", "live": "活跃", "orphaned": "已孤立",
++  "Generated": "已生成", "Delegated": "已委托", "Patched": "已修补", "Untouched": "未改动",
++  "Algorithm": "算法", "Created": "创建时间",
++
++  // scope-view
++  "Back to profile": "返回配置",
++  "Search": "搜索", "Sort order": "排序方式",
++  "Recent": "最近", "User": "用户", "Selected": "已选",
++  "All users": "所有用户",
++  "Reading installed apps…": "正在读取已安装应用…",
++  "Could not read the device app list": "无法读取设备应用列表",
++  "Clear": "清除", "Clear usage": "清除使用记录", "Invert": "反选",
++  "Auto-include is idle until the package baseline is seeded.":
++    "自动纳入处于待命状态，直到应用基线建立。",
++  "Auto-include is on — dashed apps are in scope automatically. Tap one to pin it here.":
++    "自动纳入已开启——虚线应用会自动进入作用域，点按可将其固定到此处。",
++  " Auto-include updates when you save.": " 保存后自动纳入状态才会更新。",
++  "In scope": "已在作用域", "advanced uid": "高级 uid",
++  "Owner": "机主",
++  "system uid": "系统 uid", "auto": "自动",
++  "Requested a key since boot": "开机以来请求过密钥",
++  "Done": "完成",
++  "Sort by": "排序方式",
++  "Frequency": "使用频率", "Most key requests first (default).": "密钥请求最多的排前面（默认）。",
++  "Recently used": "最近使用", "Last requested first.": "最近请求的排前面。",
++  "Name": "名称", "A→Z.": "A→Z。",
++  "Install time": "安装时间", "Newest installs first.": "最新安装的排前面。",
++  "No apps found on the device.": "设备上未找到应用。",
++  "No app has requested a key since boot yet.": "开机以来还没有应用请求过密钥。",
++  "Nothing in scope yet — tap an app to add it.": "作用域为空——点按应用即可添加。",
++  "No apps match.": "没有匹配的应用。",
++
++  // logs
++  "Filter": "筛选", "Filter •": "筛选 •", "Pause": "暂停", "Resume": "继续",
++  "daemon unreachable": "守护进程不可达",
++  "Scroll to top": "回到顶部", "Scroll to bottom": "跳到底部",
++  "Minimum level": "最低级别", "Tags": "标签", "No tags seen yet.": "还没有出现标签。",
++  "Message contains": "消息包含", "Reset filters": "重置筛选",
++  "Filter logs": "筛选日志", "Save logs": "保存日志",
++  "Folder": "文件夹", "Filename": "文件名",
++  "No logs to save": "没有可保存的日志",
++
++  // rkp-view
++  "Remote Key Provision": "远程密钥供给（RKP）",
++  "You usually don't need to change these.": "通常无需更改这些开关。",
++  "The module handles remote provisioning while these stay on. Only if a device explicitly fails keybox attestation — a rare case — should you toggle them all off to force keystore2 onto the keybox.":
++    "开关保持开启时，模块会自动处理远程供给。只有当设备明确无法通过密钥盒证明（罕见情况）时，才需要全部关闭，以强制 keystore2 使用密钥盒。",
++
++  // toasts / dialogs from controllers
++  "Keep": "保留", "Discard": "丢弃", "Target it": "仍然指定", "Pin it here": "固定到此处",
++  "Create": "创建",
++  "Name must be 1-32 chars: letters, digits, - or _.": "名称须为 1-32 个字符：字母、数字、- 或 _。",
++  "Saved": "已保存", "New profile name": "新配置名称",
++  "The module seeds config.json on install. You can create a starter config now.":
++    "模块会在安装时生成 config.json。你可以现在创建一个初始配置。",
++  "Fix or remove the file on disk — the WebUI will not overwrite a config it cannot read.":
++    "请修复或删除磁盘上的该文件——WebUI 不会覆盖无法读取的配置。",
++  "Create starter config": "创建初始配置",
++  "unknown error": "未知错误",
++  "Could not read that file.": "无法读取该文件。",
++  "The daemon rejected the install.": "守护进程拒绝了此次安装。",
++  "Self-update is disabled in the Integrity Fusion build; flash a newer fusion module instead.":
++    "融合版已禁用自更新；请刷入新版融合包升级。",
++  "Update flashed — reboot to apply.": "更新已刷入——重启后生效。",
++  "Fabricated value saved — applying…": "构造值已保存——正在应用…",
++  "No keys deleted": "没有删除任何密钥",
++  "Profile is not an object.": "配置不是对象。",
++  "At least one app is required (or turn on Auto-include new apps).":
++    "至少需要一个应用（或开启“自动纳入新应用”）。",
++  "A keybox ending in .xml is required.": "需要以 .xml 结尾的密钥盒。",
++  "Config must be an object.": "config 必须是对象。",
++  "Config.profiles must be an object.": "config.profiles 必须是对象。",
++
++  // validate.js error messages
++  "Keep the app selection changes you made?": "保留你所做的应用选择修改？",
++  "Clear the recorded app-usage (frequency) memory?\n\nThis wipes the request counts used to sort and populate Recent. It does not change any profile.":
++    "清除已记录的应用使用（频率）数据？\n\n这将抹去用于排序和填充“最近”列表的请求计数，不会更改任何配置。",
++};
++
++// ---- rules for strings composed at runtime ------------------------------
++// Each: [regex, replacement] where replacement is a string ($1 refs) or a
++// function(match) => string. Applied only when no exact match was found.
++const RULES = [
++  // counts, everywhere
++  [/^(\d+) set$/, "$1 项已设置"],
++  [/^(\d+) apps?$/, "$1 个应用"],
++  [/^(\d+) auto$/, "自动 $1"],
++  [/^(\d+) to fix$/, "$1 项待修复"],
++  [/^(\d+) issues? to fix before saving$/, "$1 项待修复才能保存"],
++  [/^(\d+) issues? to fix$/, "$1 项待修复"],
++  [/^\+(\d+) more$/, "还有 $1 项"],
++  [/^(\d+) certs?$/, "$1 张证书"],
++
++  // config-view resolve hints
++  [/^harvested → (.*)$/, "采集值 → $1"],
++
++  // field.js
++  [/^(.*) \(missing\)$/, "$1（缺失）"],
++  [/^Remove (.+)$/, "移除 $1"],
++  [/^Used by profile “(.+)”$/, "已被配置“$1”占用"],
++  [/^(.*?) · (\d+) auto$/, (m) => t(m[1]) + " · 自动 " + m[2]],
++  [/^Auto-include on — (\d+) apps? installed since TEESimulator started (?:is|are) also in scope\.$/,
++    "自动纳入已开启——TEESimulator 启动后安装的 $1 个应用也在作用域内。"],
++  [/^Advanced: targets caller uid (\d+)$/, "高级：定向到调用方 uid $1"],
++  [/^(.+) is not installed \(a name-match applies if it installs later\)$/,
++    "$1 未安装（若之后安装，名称匹配将自动生效）"],
++  [/^user (\d+)$/, "用户 $1"],
++
++  // key-view
++  [/^Delete selected \((\d+)\)$/, "删除所选（$1）"],
++  [/^No keys match “(.+)”\.$/, "没有匹配“$1”的密钥。"],
++  [/^(\d+) real device keys? hidden — switch to All to show them\.$/,
++    "$1 个真实设备密钥已隐藏——切换到“全部”即可显示。"],
++  [/^(Clear filter|Filter by) (.+)$/, (m) => (m[1] === "Clear filter" ? "清除筛选 " : "按 ") + m[2] + (m[1] === "Clear filter" ? "" : " 筛选")],
++  [/^(\d+) real keys? hidden$/, "$1 个真实密钥已隐藏"],
++  [/^(\d+) keys? spoofed$/, "已伪装 $1 个"],
++  [/^state (\d+)$/, "状态 $1"],
++  [/^(Algorithm|Keybox|Created): $/, (m) => ({ Algorithm: "算法：", Keybox: "密钥盒：", Created: "创建时间：" })[m[1]]],
++
++  // scope-view
++  [/^Scope — (.+)$/, "作用域 — $1"],
++  [/^(\d+) selected( · (\d+) auto)?$/, (m) => "已选 " + m[1] + (m[3] ? " · 自动 " + m[3] : "")],
++  [/^not installed( for (.+))?$/, (m) => "未安装" + (m[2] ? "（用户 " + m[2] + "）" : "")],
++  [/^No apps match “(.+)”\.$/, "没有匹配“$1”的应用。"],
++  [/^User (\d+)$/, "用户 $1"],
++  [/^in (.+)$/, "属于 $1"],
++  [/^auto in (.+)$/, "由 $1 自动纳入"],
++  [/^(\d+) key requests recorded$/, "已记录 $1 次密钥请求"],
++  [/^Installed for user (\d+)( \(work profile\))?$/, (m) => "安装于用户 " + m[1] + (m[2] ? "（工作资料）" : "")],
++  [/^Already targeted by profile (.+)$/, "已被配置 $1 定向"],
++  [/^In scope automatically — tap to pin it to (.+)\. To exclude it, turn off Auto-include new apps\.$/,
++    "已自动进入作用域——点按可固定到 $1。若要排除它，请关闭“自动纳入新应用”。"],
++  [/^Auto-included by profile (.+) — tap to pin it here instead\.$/,
++    "由配置 $1 自动纳入——点按可改为固定到此处。"],
++
++  // keybox-view
++  [/^Inspect (.+)$/, "查看 $1"],
++  [/^Imported (.+)$/, "已导入 $1"],
++  [/^Renamed to (.+)$/, "已重命名为 $1"],
++  [/^Deleted (.+)$/, "已删除 $1"],
++  [/^DeviceID: (.*)$/, "DeviceID：$1"],
++
++  // system-view
++  [/^build (\d+)$/, "构建 $1"],
++  [/^Flashes (release|debug) over the current module, then reboot to apply\.$/,
++    (m) => "将" + (m[1] === "release" ? "正式版" : "调试版") + "刷入覆盖当前模块，重启后生效。"],
++  [/^commit ([0-9a-f]+)$/, "提交 $1"],
++  [/^Roots in the Google Hardware Attestation key( · (not revoked|revocation list unavailable))?\.$/,
++    (m) => "根植于 Google 硬件证明密钥" + (m[2] ? (m[2] === "not revoked" ? " · 未被吊销" : " · 吊销列表不可用") : "") + "。"],
++  [/^Roots in a Samsung Knox attestation key( · (not revoked|revocation list unavailable))?\.$/,
++    (m) => "根植于三星 Knox 证明密钥" + (m[2] ? (m[2] === "not revoked" ? " · 未被吊销" : " · 吊销列表不可用") : "") + "。"],
++  [/^Chain does not root in a recognized attestation authority( · revocation list unavailable)?\.$/,
++    (m) => "证书链未根植于已知的证明机构" + (m[1] ? " · 吊销列表不可用" : "") + "。"],
++
++  // controllers — toasts and confirm dialogs
++  [/^Clear failed: (.*)$/, "清除失败：$1"],
++  [/^Save failed: (.*)$/, "保存失败：$1"],
++  [/^Could not create config: (.*)$/, "无法创建配置：$1"],
++  [/^Rescanned — (\d+) apps? targeted$/, "重新扫描完成——已定位 $1 个应用"],
++  [/^Rescan failed: (.*)$/, "重新扫描失败：$1"],
++  [/^A profile named (.+) already exists\.$/, "已存在名为 $1 的配置。"],
++  [/^Remove profile "(.+)"\?$/, "删除配置“$1”？"],
++  [/^Cannot read overrides\.json: (.*)$/, "无法读取 overrides.json：$1"],
++  [/^Install canary-([\d?]+) \((release|debug)\)\? This downloads and flashes the module over the current install\.$/,
++    (m) => "安装 canary-" + m[1] + "（" + (m[2] === "release" ? "正式版" : "调试版") + "）？将下载并刷入覆盖当前安装的模块。"],
++  [/^Install failed: (.*)$/, (m) => "安装失败：" + t(m[1])],
++  [/^Inspect failed: (.*)$/, "查看失败：$1"],
++  [/^Refresh failed: (.*)$/, "刷新失败：$1"],
++  [/^Import failed: (.*)$/, "导入失败：$1"],
++  [/^Rename failed: (.*)$/, "重命名失败：$1"],
++  [/^Delete failed: (.*)$/, "删除失败：$1"],
++  [/^Overwrite existing keybox "(.+)"\?$/, "覆盖已存在的密钥盒“$1”？"],
++  [/^Rename "(.+)" to:$/, "将“$1”重命名为："],
++  [/^Delete keybox "(.+)"\? This cannot be undone\.$/, "删除密钥盒“$1”？此操作无法撤销。"],
++  [/^Saved to (.*)$/, "已保存到 $1"],
++  [/^Cleared (\d+) apps?$/, "已清除 $1 个应用"],
++  [/^Target privileged uid (\d+)\?([\s\S]*)$/,
++    (m) => "要定向到特权 uid " + m[1] + " 吗？\n\n这是系统/shell uid（例如 shell、system_server），不是普通应用。仅在明确知道原因时才这样做。"],
++
++  // keyadmin-controller
++  [/^(\d+) keys?$/, "$1 个密钥"],
++  [/^Delete (this key|\d+ keys) from keystore2\? The owning app will re-create the key \(and re-attest it\) on next use\.$/,
++    (m) => "从 keystore2 删除" + (m[1] === "this key" ? "此密钥" : " " + t(m[1])) + "？所属应用下次使用时会重新创建（并重新证明）该密钥。"],
++  [/^Deleted (\d+) keys?$/, "已删除 $1 个密钥"],
++
++  // validate.js
++  [/^Invalid app entry: (.*)$/, "无效的应用条目：$1"],
++  [/^Invalid ([^:]+): (.*)$/, "$1 无效：$2"],
++  [/^(.+) is required\.$/, "必须填写“$1”。"],
++  [/^Unsupported version \(expected (\d+)\)\.$/, "不支持的版本（应为 $1）。"],
++  [/^App entry (.+) is claimed by (\d+) profiles; it must be unique\.$/,
++    "应用条目 $1 被 $2 个配置同时使用；它必须是唯一的。"],
++  [/^Only one profile may auto-include new apps; (\d+) do\.$/,
++    "只允许一个配置开启“自动纳入新应用”；当前有 $1 个。"],
++];
++
++// ---- the translator ------------------------------------------------------
++export function t(s) {
++  if (typeof s !== "string" || !s) return s;
++  const exact = DICT[s];
++  if (exact != null) return exact;
++  for (const [re, rep] of RULES) {
++    const m = s.match(re);
++    if (m) return typeof rep === "function" ? rep(m) : s.replace(re, rep);
++  }
++  return s;
++}
+diff --git a/module/webroot/js/ui/logs-view.js b/module/webroot/js/ui/logs-view.js
+index b29a73e..76cb1a5 100644
+--- a/module/webroot/js/ui/logs-view.js
++++ b/module/webroot/js/ui/logs-view.js
+@@ -9,6 +9,7 @@
+ // inject markup.
+ 
+ import { el, clear } from "./dom.js";
++import { t } from "./i18n.js";
+ 
+ const LEVEL_CLASS = { V: "lv-v", D: "lv-d", I: "lv-i", W: "lv-w", E: "lv-e", F: "lv-f" };
+ const LEVEL_RANK = { V: 0, D: 1, I: 2, W: 3, E: 4, F: 5 };
+@@ -82,14 +83,14 @@ export function renderLogs(mount, state, actions) {
+   const filter = state.filter || {};
+   const filterBtn = shell.querySelector('[data-act="filter"]');
+   filterBtn.classList.toggle("active", !!state.filterActive);
+-  filterBtn.textContent = state.filterActive ? "Filter •" : "Filter";
++  filterBtn.textContent = t(state.filterActive ? "Filter •" : "Filter");
+ 
+   const pauseBtn = shell.querySelector('[data-act="pause"]');
+-  pauseBtn.textContent = state.paused ? "Resume" : "Pause";
++  pauseBtn.textContent = t(state.paused ? "Resume" : "Pause");
+   pauseBtn.classList.toggle("active", state.paused);
+ 
+   const msg = shell.querySelector('[data-role="msg"]');
+-  msg.textContent = state.reachable ? "" : "daemon unreachable" + (state.error ? " — " + state.error : "");
++  msg.textContent = state.reachable ? "" : t("daemon unreachable") + (state.error ? " — " + state.error : "");
+   msg.classList.toggle("off", !state.reachable);
+   msg.hidden = state.reachable;
+ 

@@ -1,0 +1,59 @@
+diff --git a/app/src/main/java/org/matrix/teesim/Packages.kt b/app/src/main/java/org/matrix/teesim/Packages.kt
+index 8d5e634..69c2f0d 100644
+--- a/app/src/main/java/org/matrix/teesim/Packages.kt
++++ b/app/src/main/java/org/matrix/teesim/Packages.kt
+@@ -9,6 +9,7 @@ import android.content.pm.ParceledListSlice
+ import android.content.pm.UserInfo
+ import android.graphics.Bitmap
+ import android.graphics.Canvas
++import android.graphics.Typeface
+ import android.graphics.drawable.BitmapDrawable
+ import android.graphics.drawable.Drawable
+ import android.os.Build
+@@ -480,6 +481,38 @@ object Packages {
+     private const val ICON_PX = 96
+     private val iconCache = LruCache<String, ByteArray>(256)
+ 
++    // One-shot guard for [warmupIconTypeface]; a benign race just warms it twice.
++    @Volatile private var typefaceWarmed = false
++
++    /**
++     * Make libhwui's default typeface resolvable before rendering any icon.
++     *
++     * This daemon is a bare app_process - never forked from zygote and never driven through
++     * ActivityThread's BIND_APPLICATION - so nothing runs [Typeface.loadPreinstalledSystemFontMap]
++     * for it: libhwui's native gDefaultTypeface stays null. Most icon drawables never touch text,
++     * but some apps ship custom drawables that call Canvas.drawText while drawing, and that path
++     * resolves the default typeface and hits LOG_ALWAYS_FATAL_IF(src == nullptr &&
++     * gDefaultTypeface == nullptr) - a SIGABRT that takes the whole daemon down (observed as a
++     * crash loop while the apps list scrolled: one app's icon aborted on the first render attempt
++     * after every daemon restart). Warming the font map here sets the default once, before the
++     * first drawable can draw text. On a platform where the call is missing or blocked the failure
++     * is logged and behavior is unchanged.
++     *
++     * loadPreinstalledSystemFontMap is a hidden API - not present in the compile SDK's
++     * android.jar (Unresolved reference at Kotlin compile time on CI) - so it is reached
++     * reflectively; NoSuchMethodException on older platforms lands in the same catch.
++     */
++    private fun warmupIconTypeface() {
++        if (typefaceWarmed) return
++        typefaceWarmed = true
++        try {
++            Typeface::class.java.getMethod("loadPreinstalledSystemFontMap").invoke(null)
++            SystemLogger.info("iconPng: system font map warmed up")
++        } catch (e: Throwable) {
++            SystemLogger.warning("iconPng: typeface warmup unavailable: ${e.message}")
++        }
++    }
++
+     /**
+      * The app icon for [pkg] rendered to a [ICON_PX]×[ICON_PX] PNG, or null when the package has no
+      * icon or anything fails. Adaptive/vector icons have no intrinsic bitmap, so the drawable is
+@@ -496,6 +529,7 @@ object Packages {
+         iconCache.get(pkg)?.let {
+             return it
+         }
++        warmupIconTypeface()
+         val drawable = loadIconDrawable(pkg, userId) ?: return null
+         return try {
+             val png = drawableToPng(drawable)

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Offline by contract: nothing external may ever load. All CSS is local. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'">
+<title>日志与诊断 · Aegis Fusion</title>
+<link rel="stylesheet" href="css/launcher.css">
+</head>
+<body class="page-logs">
+<main class="wrap">
+
+    <!-- Same header scaffold as apps.html (shared .ap-* classes). -->
+    <header class="ap-head">
+        <a class="ap-back" href="./index.html" aria-label="返回主页">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </a>
+        <div class="ap-head-body">
+            <h1>日志与诊断</h1>
+            <p class="ap-sub">三处运行日志集中查看，一键导出诊断文件反馈问题</p>
+        </div>
+    </header>
+
+    <!-- One-tap diagnostics: versions, live status, BL props and log tails in a
+         single file under /sdcard/Download. Hard redaction rules in logs.js:
+         never the keybox body, never admin.token, scope = count only. -->
+    <section class="diag-box" id="diag-box">
+        <p class="diag-title">一键诊断</p>
+        <p class="diag-note">生成一个文本文件（模块版本 · 运行状态 · BL 属性 · 三处日志尾部）到 Download 目录，直接发给开发者即可。<strong>不包含 keybox 内容与管理员令牌</strong>；应用列表只记录数量；日志中的设备标识（IMEI/序列号等）已自动脱敏。日志里可能含有包名，分享前请自查。</p>
+        <button class="lg-export-btn" id="diag-btn" type="button">生成诊断文件</button>
+        <p class="diag-out" id="diag-out" hidden></p>
+        <p class="hint off" id="diag-err" hidden></p>
+    </section>
+
+    <!-- Debug mode: ON by default since flash (customize.sh seeds the flag).
+         Toggling touches/removes /data/adb/teesim/.debug; every shell script
+         checks the flag per call, so the switch takes effect immediately. -->
+    <section class="diag-box" id="dbg-box">
+        <p class="diag-title">Debug 模式 <span class="lg-meta" id="dbg-state">检测中…</span></p>
+        <p class="diag-note">开启后，keybox 获取 / 指纹生成 / 身份同步 / 作用域维护 / 开机滴答会把每一步决策（下载尝试、哈希对比、身份变更、GMS 播种等）写入统一的 <code>debug.log</code>，排障不再靠猜。默认开启，模块稳定后可关闭。</p>
+        <button class="mini-btn" id="dbg-toggle" type="button">检测中…</button>
+    </section>
+
+    <!-- Source tabs: same chip language as the apps page filter (.ap-chip). -->
+    <div class="ap-chips" role="group" aria-label="日志来源">
+        <button class="ap-chip" id="chip-kb" type="button" aria-pressed="true">Keybox 获取</button>
+        <button class="ap-chip" id="chip-sync" type="button" aria-pressed="false">作用域同步</button>
+        <button class="ap-chip" id="chip-daemon" type="button" aria-pressed="false">守护进程</button>
+        <button class="ap-chip" id="chip-debug" type="button" aria-pressed="false">Debug</button>
+    </div>
+
+    <div class="lg-head">
+        <span class="lg-meta" id="lg-meta">读取中…</span>
+        <button class="mini-btn" id="lg-refresh" type="button">刷新</button>
+    </div>
+    <div class="lg-view" id="lg-view" role="log" aria-live="polite" aria-label="日志内容"></div>
+
+    <footer class="foot">
+        <p class="fine">Keybox 获取 = <code>keybox-fetch.log</code> · 作用域同步 = <code>apps-sync.log</code> · 守护进程 = 引擎内存日志（admin socket） · Debug = <code>debug.log</code>（统一详细日志）</p>
+    </footer>
+</main>
+
+<script src="js/conf.js"></script>
+<script src="js/logs.js"></script>
+</body>
+</html>

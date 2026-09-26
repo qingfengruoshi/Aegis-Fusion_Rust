@@ -1,7 +1,6 @@
-id=tricky_store
-name=TEESimulator-RS
-version=${REPLACEMEVER}
-versionCode=${REPLACEMEVERCODE}
-author=JingMatrix, Enginex0
-description=Software simulation for Android hardware-backed key pairs with key attestation
-updateJson=https://raw.githubusercontent.com/Enginex0/TEESimulator-RS/main/module/update.json
+id=aegisfusion_rs
+name=Aegis Fusion RS (TEE + 指纹 + BL)
+version=@FUSION_VERSION@
+versionCode=@FUSION_VERSION_CODE@
+author=qingfengruoshi (Aegis Fusion RS) · JingMatrix (TEESimulator) · osm0sis & chiteroman (Play Integrity Fork) · MeowDump (Integrity-Box & keybox channel)
+description=Aegis Fusion 的并行变体：引擎与 shell 线同为 TEESimulator（差异只在管理层实现）。TEE 证明伪装 + 设备指纹伪装 + BL/环境隐藏 + keybox 自动管理。指纹半需要 Zygisk。

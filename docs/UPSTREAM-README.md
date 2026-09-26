@@ -1,3 +1,8 @@
+> ⚠️ **本文已过时（2026-09-21）**：这是 **Enginex0/TEESimulator-RS** 的上游 README，而本仓库现已
+> 改为以 **JingMatrix/TEESimulator** 为基座（见 `GAP-AND-ROADMAP.md` §9）。
+> 保留它只是为了记录当时评估过的那个候选基座及其自述价值（Rust 证书生成 / 密钥跨重启 /
+> 证明行为贴近原生 Android）。当前引擎的说明请看 `README.md` 与 `NOTICE.md`。
+
 <p align="center">
   <h1 align="center">TEESimulator-RS</h1>
   <p align="center"><b>Pass hardware security checks on a rooted Android phone</b></p>

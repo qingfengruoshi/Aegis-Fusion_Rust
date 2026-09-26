@@ -1,0 +1,23 @@
+diff --git a/app/src/main/java/org/matrix/teesim/Harvester.kt b/app/src/main/java/org/matrix/teesim/Harvester.kt
+index 8a8470b..b44f419 100644
+--- a/app/src/main/java/org/matrix/teesim/Harvester.kt
++++ b/app/src/main/java/org/matrix/teesim/Harvester.kt
+@@ -636,8 +636,17 @@ object Harvester {
+                 safeId("getMeidForSubscriber(0)") { phoneSubInfoId("getMeidForSubscriber", 0) }
+             }
+         val serial = r.serial.ifBlank { DeviceProps.prop("ro.serialno", "") }
++        // Fusion patch 0006 (v3.2.3): never log full device identifiers. This line
++        // feeds /logs and teesim.log, which the WebUI diagnostics export copies into
++        // shared storage. Presence + length keeps the diagnostic signal ("did the
++        // harvest succeed, is the format sane") without the identifying bytes; the
++        // real values stay in root-only harvested.json / config.json.
++        fun fusionMask(v: String) = if (v.isBlank()) "blank" else "len=" + v.length
+         SystemLogger.info(
+-            "Harvest telephony IDs: imei='$imei' secondImei='$imei2' meid='$meid' serial='$serial'"
++            "Harvest telephony IDs: imei=<" + fusionMask(imei) +
++                "> secondImei=<" + fusionMask(imei2) +
++                "> meid=<" + fusionMask(meid) +
++                "> serial=<" + fusionMask(serial) + ">"
+         )
+         // These ids are not carried by device-properties attestation. When the attested leaf had no
+         // value (r.<id> blank) and we read one from the OS, it is a SUPPLEMENT override — the RAW

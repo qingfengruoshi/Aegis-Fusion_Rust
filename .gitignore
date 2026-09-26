@@ -1,13 +1,19 @@
-# Rust/构建产物
-native-certgen/target/
-target/
-*.so
-# Gradle
-.gradle/
+upstream/
+out/
+*.zip
 build/
-app/build/
-# 本地
 .workbuddy/
-*.log
-.idea/
-*.iml
+# Added by code-review-graph
+.code-review-graph/
+.playwright-cli/
+.mcp.json
+
+# Local-only (never shipped, never needed to build): the IDE/vendor agent
+# workspace and the development-time UI previews. Untracked 2026-09-20.
+.codebuddy/
+preview/
+
+# Rust build artifacts (fusionctl)
+rust/**/target/
+# pif-fetch differential-test stray (never shipped)
+/custom.pif.prop
