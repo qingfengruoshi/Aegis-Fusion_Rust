@@ -52,8 +52,15 @@ jobs:
             echo "boringssl: BOOTSTRAP - main is at $COMMIT"
             echo "!! commit build-fingerprint-boringssl.txt to freeze this pin"
           fi
-          git clone -q --depth 1 https://boringssl.googlesource.com/boringssl "$RUNNER_TEMP/boringssl"
-          git -C "$RUNNER_TEMP/boringssl" checkout -q "$COMMIT"
+          # Fetch the PINNED commit directly. A `--depth 1` clone of main +
+          # `checkout <pin>` only works while main's tip == the pin: once
+          # upstream advances, the shallow clone no longer carries the pinned
+          # tree ("unable to read tree", exit 128). googlesource allows
+          # fetching an arbitrary SHA, so fetch the pin itself.
+          git init -q "$RUNNER_TEMP/boringssl"
+          git -C "$RUNNER_TEMP/boringssl" remote add origin https://boringssl.googlesource.com/boringssl
+          git -C "$RUNNER_TEMP/boringssl" fetch -q --depth 1 origin "$COMMIT"
+          git -C "$RUNNER_TEMP/boringssl" checkout -q --detach FETCH_HEAD
           echo "boringssl resolved: $(git -C "$RUNNER_TEMP/boringssl" rev-parse HEAD)"
           echo "BORINGSSL=$RUNNER_TEMP/boringssl" >> "$GITHUB_ENV"
 
