@@ -358,7 +358,7 @@ Enginex0 自己的 README 说的很清楚（`docs/UPSTREAM-README.md:14`）：
 | 0005 | `keymint/keymint_router.cpp` |
 | 0007 | `app/.../Control.kt`、`KeyAdmin.kt` |
 
-证据二 —— 本地 `D:\Storage\Code_Storage\Hide\TEESimulator` 是 `4f42350e` 的 detached HEAD，working tree 里恰好是上面那 12 个文件被改（未提交）＝补丁已就地应用。补丁里已经出现 Fusion 专属代码：
+证据二 —— 本地 `本地 TEESimulator 克隆（shell 线姊妹目录）` 是 `4f42350e` 的 detached HEAD，working tree 里恰好是上面那 12 个文件被改（未提交）＝补丁已就地应用。补丁里已经出现 Fusion 专属代码：
 - `App.kt:509` fallback `File("/data/adb/modules/integrityfusion")`
 - `Harvester.kt:1270` 注释 `Fusion (Aegis) compat override`，`:1288` 读 `/data/adb/teesim/bootkey.bin`
 
@@ -464,7 +464,7 @@ Enginex0 自己的 README 说的很清楚（`docs/UPSTREAM-README.md:14`）：
 | 项 | 状态 | 影响 |
 |---|---|---|
 | `rustc` / `cargo` | ✅ **已装**（1.98.1，`~/.cargo/bin`，rustup home `~/.rustup`） | 两条宿主工具链：msvc（默认）+ **gnu** |
-| **C 链接器** | ✅ **MinGW-w64 16.2.0**（scoop，`D:\Storage\Scoop_Storage\apps\mingw\current\bin`，已在用户 PATH） | **`cargo test` / `cargo build` 已可用**（实测 1 passed / 0 failed） |
+| **C 链接器** | ✅ **MinGW-w64 16.2.0**（scoop，`<scoop-mingw-bin>`，已在用户 PATH） | **`cargo test` / `cargo build` 已可用**（实测 1 passed / 0 failed） |
 | `cargo-ndk` / Android target | ❌ 未装 / 未加 | 无法交叉编译到 Android |
 | Android SDK / NDK | **未安装**（`ANDROID_HOME` / `ANDROID_SDK_ROOT` / `ANDROID_NDK_HOME` 均未设置；无 `local.properties`；`/c/Android` 下**只有 platform-tools**） | 本机**构建不了** Kotlin / C++ / 模块 zip |
 | `adb` | ✅ `/c/Android/adb.exe` | 真机运行时验证可用 |
@@ -472,7 +472,7 @@ Enginex0 自己的 README 说的很清楚（`docs/UPSTREAM-README.md:14`）：
 
 **本地跑 Rust 的标准调用方式**（默认工具链仍是 msvc，用 `+` 选 gnu）：
 ```bash
-export PATH="$HOME/.cargo/bin:/d/Storage/Scoop_Storage/apps/mingw/current/bin:$PATH"
+export PATH="$HOME/.cargo/bin:<scoop-mingw-bin>:$PATH"
 cargo +stable-x86_64-pc-windows-gnu test
 ```
 > 必须用 **GNU** 工具链 —— MSVC 目标要 `link.exe`（本机没有，且 `rustc` 会**误找 MSYS 的 `/usr/bin/link.exe`**，那是硬链接工具，报 `os error 193 不是有效的 Win32 应用程序`）。
@@ -767,7 +767,7 @@ id=aegisfusion_rs  pad=3  /data/adb/modules/aegisfusion_rs///      len=35  OK
 ### 13.3 让它**比看起来难**的因素
 
 1. ~~**本机不能链接**（最大摩擦）~~ → ✅ **已于 2026-09-21 解决**：装了 MinGW-w64 16.2.0 + Rust 的 GNU 宿主工具链，**`cargo test` / `cargo build` 本机可用**。
-   本地调用：`export PATH="$HOME/.cargo/bin:/d/Storage/Scoop_Storage/apps/mingw/current/bin:$PATH"` 然后 `cargo +stable-x86_64-pc-windows-gnu test`。
+   本地调用：`export PATH="$HOME/.cargo/bin:<scoop-mingw-bin>:$PATH"` 然后 `cargo +stable-x86_64-pc-windows-gnu test`。
    ⇒ **本机可以「写完就跑测试」，不必每次走 CI。** 仍需 CI 的只有 Android 交叉编译与模块打包（缺 NDK + cargo-ndk）。
 2. **UI 的静默失败面**：95 个探针键**少接一个不会报错**，只会让某个状态灯显示「未知」。所以**必须有等价性验收**（`CONTRACT-webui.md` §6）。
 3. **网络阶梯的等价复刻**：`keybox-fetch.sh` 的降级顺序与代理探测是踩了实际事故才形成的（2026-09-13 受限网络下静默失效）。少一档降级 = 那类设备上自动刷新永久失效。

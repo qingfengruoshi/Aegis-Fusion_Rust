@@ -1,6 +1,6 @@
 # verdict + keybox 迁移契约（v0.1，2026-09-21）
 
-**来源**：`D:\Storage\Code_Storage\Hide\IntegrityFusion`（shell 稳定线，`main` @ 领先 origin 7 commit）
+**来源**：`shell 线仓库 IntegrityFusion（本机姊妹目录）`（shell 稳定线，`main` @ 领先 origin 7 commit）
 **落点**：本仓库 Hide_Rust（Rust 引擎线，基座 TEESimulator-RS @ `6d241e5`）
 **目的**：在不动 WebUI 一个字节的前提下，把 verdict / keybox 两条逻辑线从 shell 迁到 Rust。本文只定义**对外契约**，不涉及实现。
 

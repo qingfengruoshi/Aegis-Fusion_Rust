@@ -21,7 +21,8 @@ unset -f rm 2>/dev/null || true
 export LC_ALL=C
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NODE="C:/Users/jinyixiu/.workbuddy/binaries/node/versions/22.22.2-3/node.exe"
+# Node 解析顺序：NODE_EXE 环境变量 → PATH 上的 node
+NODE="${NODE_EXE:-node}"
 RUST_BIN="$ROOT/rust/fusionctl/target/release/fusionctl.exe"
 BASE="$ROOT/build/diff-ui-probe"
 
@@ -128,7 +129,8 @@ run_probe_case() { # <name> <page>
     make_fixture "$d"
     # 参考实现 = shell 线仓库的探针（RS 的 launcher.js 已换成 fusionctl 调用，
     # 提取不到旧探针是预期）；MODPATH 仍烘焙 RS 的模块目录（夹具在这边）。
-    local SHELL_LINE_JS="${SHELL_LINE_ROOT:-D:/Storage/Code_Storage/Hide/IntegrityFusion}/module/webroot/js/launcher.js"
+    local shell_line_default; shell_line_default="$(dirname "$ROOT")/Hide/IntegrityFusion"
+    local SHELL_LINE_JS="${SHELL_LINE_ROOT:-$shell_line_default}/module/webroot/js/launcher.js"
     local js_win; js_win=$(cygpath -m "$SHELL_LINE_JS")
     local out_win; out_win=$(cygpath -m "$d/probe.launcher.sh")
     AEGIS_TEE_DIR="$d/teesim" AEGIS_MODDIR="$d/mod" \
@@ -170,7 +172,8 @@ run_logs_case() {
     wtee=$(cygpath -m "$d/teesim"); wmod=$(cygpath -m "$d/mod")
 
     make_fixture "$d"
-    local SHELL_LINE_JS="${SHELL_LINE_ROOT:-D:/Storage/Code_Storage/Hide/IntegrityFusion}/module/webroot/js/logs.js"
+    local shell_line_default; shell_line_default="$(dirname "$ROOT")/Hide/IntegrityFusion"
+    local SHELL_LINE_JS="${SHELL_LINE_ROOT:-$shell_line_default}/module/webroot/js/logs.js"
     local js_win; js_win=$(cygpath -m "$SHELL_LINE_JS")
     local out_win; out_win=$(cygpath -m "$d/probe.logs.sh")
     AEGIS_TEE_DIR="$d/teesim" AEGIS_MODDIR="$d/mod" AEGIS_MODID="aegisfusion_rs" \
