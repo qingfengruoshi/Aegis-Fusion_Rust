@@ -233,7 +233,10 @@ jobs:
         working-directory: rust/fusionctl
         run: |
           mkdir -p "$GITHUB_WORKSPACE/out"
-          cargo ndk -t arm64-v8a -o "$GITHUB_WORKSPACE/out/fusionctl.arm64" build --release --locked
+          # cargo ndk sets up the NDK linker env; no -o (binary, not cdylib)
+          cargo ndk -t arm64-v8a build --release --locked
+          cp target/aarch64-linux-android/release/fusionctl \
+            "$GITHUB_WORKSPACE/out/fusionctl.arm64/fusionctl"
           ls -la "$GITHUB_WORKSPACE/out/fusionctl.arm64/"
 
       - name: Assemble the fusion module
