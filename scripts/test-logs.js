@@ -195,7 +195,7 @@ var DIAG_PROBE_OUT = [
     'KEYBOX=yes', 'KBSHA=abcd1234abcd', 'KBMARK=yes', 'REF=24', 'KBG=3', 'KBAGE=5', 'KBRUN=no', 'KBRUNM=0',
     'REVJ=yes', 'REVA=7', 'DBG=yes',
     'PIFSRC=/data/adb/modules/aegisfusion_rs/custom.pif.prop', 'ZYG=yes',
-    'PIFST=ok', 'PIFD=-1', 'PIFAUTO=yes', 'PIFEXP=2026-10-01', 'PIFFAIL=',
+    'PIFST=ok', 'PIFD=-1', 'PIFAUTO=yes', 'PIFEXP=2027-12-31', 'PIFFAIL=',
     'PF_OFF=no', 'PF_SYNCOFF=no',
     'SW_PATCH=2026-08-01', 'VEN_PATCH=2026-09-05',
     'CFG_MODE=patch', 'CFG_OSVERSION=170000', 'CFG_SYSTEM=2026-08-01', 'CFG_VENDOR=2026-09-05', 'CFG_BOOT=2026-09-05',
@@ -352,7 +352,7 @@ function baseShell(cmd) {
         'fingerprint section shows the bundled auto fingerprint');
     ok(t.indexOf('轮换状态: 正常（到期前自动更换）') !== -1,
         'rotation phase included for auto-managed fingerprints');
-    ok(t.indexOf('预估到期日: 2026-10-01') !== -1,
+    ok(t.indexOf('预估到期日: 2027-12-31') !== -1,
         'estimated expiry date included when the prop carries the comment');
     ok(t.indexOf('Zygisk 环境: 已启用') !== -1, 'zygisk env state included');
     ok(t.indexOf('fingerprint ready at') !== -1, 'pif-fetch.log tail included');

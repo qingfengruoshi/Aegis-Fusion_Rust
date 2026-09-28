@@ -103,7 +103,7 @@ make_fixture() { # <d>
     printf '{"entries":{}}\n' > "$d/teesim/.revocation-status.json"
     printf 'seed\n' > "$d/teesim/.pif-source"
     printf '1726900000\n1727000000\n' > "$d/mod/.pif-auto"
-    printf 'BRAND=google\nMODEL=Pixel 9 Pro\n# Estimated Expiry: 2026-10-01\n' > "$d/mod/custom.pif.prop"
+    printf 'BRAND=google\nMODEL=Pixel 9 Pro\n# Estimated Expiry: 2027-12-31\n' > "$d/mod/custom.pif.prop"
     for k in ro.boot.vbmeta.device_state ro.boot.verifiedbootstate ro.build.tags ro.boot.flash.locked; do
         printf 'locked\n' > "$d/getprop/$k"
     done

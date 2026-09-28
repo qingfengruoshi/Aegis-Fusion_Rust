@@ -31,7 +31,7 @@ pass=0; fail=0; total=0
 mkdir -p "$BASE/bin"
 cat > "$BASE/autopif_ok.sh" <<'EOS'
 #!/bin/sh
-printf 'BRAND=google\nDEVICE=caiman\nPRODUCT=caiman_beta\nMANUFACTURER=google\nMODEL=Pixel 9 Pro\nSECURITY_PATCH=2026-09-05\nFINGERPRINT=google/caiman_beta/caiman:14/AP2A.240905.003\n# Estimated Expiry: 2026-10-01\n' > "$AEGIS_MODDIR/custom.pif.prop"
+printf 'BRAND=google\nDEVICE=caiman\nPRODUCT=caiman_beta\nMANUFACTURER=google\nMODEL=Pixel 9 Pro\nSECURITY_PATCH=2026-09-05\nFINGERPRINT=google/caiman_beta/caiman:14/AP2A.240905.003\n# Estimated Expiry: 2027-12-31\n' > "$AEGIS_MODDIR/custom.pif.prop"
 echo "generated" >> "$GEN_SENTINEL"
 EOS
 cat > "$BASE/autopif_fail.sh" <<'EOS'
@@ -52,7 +52,7 @@ MANUFACTURER=google
 MODEL=Pixel 9 Pro
 SECURITY_PATCH=2026-09-05
 FINGERPRINT=google/caiman_beta/caiman:14/AP2A.240905.003
-# Estimated Expiry: 2026-10-01'
+# Estimated Expiry: 2027-12-31'
 
 # --- 环境准备 -----------------------------------------------------------------
 setup_case() { # <name> — 建 teesim/mod，写桩环境
@@ -154,7 +154,7 @@ DEVICE=caiman
 MODEL=Pixel 9 Pro
 SECURITY_PATCH=2026-09-05' > "$d/mod/pif_seed.prop"
     printf '1700000000\n' > "$d/mod/pif_seed.auto"
-    printf 'BRAND=google\nDEVICE=caiman\nMODEL=Pixel 9 Pro\nSECURITY_PATCH=2026-09-05\n# Estimated Expiry: 2026-10-01\n' > "$d/teesim/pif-master/custom.pif.prop"
+    printf 'BRAND=google\nDEVICE=caiman\nMODEL=Pixel 9 Pro\nSECURITY_PATCH=2026-09-05\n# Estimated Expiry: 2027-12-31\n' > "$d/teesim/pif-master/custom.pif.prop"
 }
 prep_gen_fail() {
     local d="$1"

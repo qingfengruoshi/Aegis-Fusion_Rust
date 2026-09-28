@@ -32,7 +32,7 @@ make_gen_ok() {
 echo "\$@" >> "$GENLOG"
 cat > "\${AEGIS_MODDIR}/custom.pif.prop" << 'PIF'
 # Canary Released: 2026-08-20
-# Estimated Expiry: 2026-10-01
+# Estimated Expiry: 2027-12-31
 BRAND=google
 DEVICE=canary
 PRODUCT=canary_beta
