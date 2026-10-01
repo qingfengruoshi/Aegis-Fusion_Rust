@@ -232,7 +232,7 @@ jobs:
       - name: Build the fusion management layer (fusionctl, arm64)
         working-directory: rust/fusionctl
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/out"
+          mkdir -p "$GITHUB_WORKSPACE/out/fusionctl.arm64"
           # cargo ndk sets up the NDK linker env; no -o (binary, not cdylib)
           cargo ndk -t arm64-v8a build --release --locked
           cp target/aarch64-linux-android/release/fusionctl \
